@@ -1,0 +1,31 @@
+/**
+ * Xuân Hòa Manufacturing - Global Styles
+ * Using Tailwind CSS v4
+ */
+
+@import "tailwindcss";
+
+/* Custom theme configuration */
+@theme {
+  --color-xh-red: #CB2026;
+  --color-xh-gold: #ECB34C;
+  --color-xh-black: #030303;
+}
+
+/* Base styles */
+html {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background-color: #f3f4f6;
+  color: #111827;
+}
+
+#app {
+  min-height: 100vh;
+}

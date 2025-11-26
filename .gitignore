@@ -1,0 +1,57 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+eggs/
+.eggs/
+*.egg
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Frappe/ERPNext
+*.pyc
+.bench
+sites/
+
+# Build outputs (keep in repo for deployment, uncomment to ignore)
+# xuanhoa_app/public/frontend/
+
+# Test
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+
+# Local config
+.env
+.env.local
+*.local
+
+# Logs
+*.log
+logs/
