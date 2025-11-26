@@ -1,15 +1,59 @@
 /**
  * Xuân Hòa Manufacturing - Global Styles
  * Using Tailwind CSS v4
+ * Color Palette: Teal/Cyan theme
  */
 
 @import "tailwindcss";
 
 /* Custom theme configuration */
 @theme {
-  --color-xh-red: #CB2026;
-  --color-xh-gold: #ECB34C;
-  --color-xh-black: #030303;
+  /* Primary - Teal */
+  --color-primary-50: #f0fdfa;
+  --color-primary-100: #ccfbf1;
+  --color-primary-200: #99f6e4;
+  --color-primary-300: #5eead4;
+  --color-primary-400: #2dd4bf;
+  --color-primary-500: #14b8a6;
+  --color-primary-600: #0d9488;
+  --color-primary-700: #0f766e;
+  --color-primary-800: #115e59;
+  --color-primary-900: #134e4a;
+  --color-primary: #055568;
+  --color-primary-light: #0d9488;
+  --color-primary-dark: #134e4a;
+  
+  /* Secondary - Cyan */
+  --color-secondary-50: #ecfeff;
+  --color-secondary-100: #cffafe;
+  --color-secondary-200: #a5f3fc;
+  --color-secondary-300: #67e8f9;
+  --color-secondary-400: #22d3ee;
+  --color-secondary-500: #06b6d4;
+  --color-secondary-600: #0891b2;
+  --color-secondary-700: #0e7490;
+  --color-secondary-800: #155e75;
+  --color-secondary-900: #164e63;
+  --color-secondary: #33CAB1;
+  
+  /* Accent colors */
+  --color-accent: #33CAB1;
+  --color-accent-light: #5FD9C4;
+  --color-accent-dark: #1FA08A;
+  
+  /* Semantic colors */
+  --color-success: #22c55e;
+  --color-success-light: #86efac;
+  --color-warning: #f59e0b;
+  --color-warning-light: #fcd34d;
+  --color-error: #ef4444;
+  --color-error-light: #fca5a5;
+  --color-info: #3b82f6;
+  --color-info-light: #93c5fd;
+  
+  /* Neutral */
+  --color-dark: #1a202c;
+  --color-light: #f7fafc;
 }
 
 /* Base styles */
@@ -28,4 +72,21 @@ body {
 
 #app {
   min-height: 100vh;
+}
+
+/* Custom utility classes */
+.btn-primary {
+  @apply bg-primary text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2;
+}
+
+.btn-secondary {
+  @apply bg-secondary text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 hover:bg-secondary-600 focus:outline-none focus:ring-2 focus:ring-secondary-500 focus:ring-offset-2;
+}
+
+.card {
+  @apply bg-white rounded-xl shadow-sm border border-gray-100;
+}
+
+.input-field {
+  @apply w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors;
 }
