@@ -1,0 +1,15 @@
+Stock Entry No,Item Code,Item Name,Quantity,UOM,Rate,Amount,S Warehouse,T Warehouse,Is Finished Item,Remarks
+SE-001,LED-5W,Bóng LED 5W,-1,Cái,15000,15000,Kho Chính - XHTB,,0,Xuất sử dụng
+SE-001,CAP-ALUMINUM,Thân Nhôm LED,-1,Cái,8000,8000,Kho Chính - XHTB,,0,Xuất sử dụng
+SE-001,HEAT-SINK,Quạt Tỏa Nhiệt,-1,Cái,5000,5000,Kho Chính - XHTB,,0,Xuất sử dụng
+SE-001,PCB-DRIVER,Mạch Điều Khiển LED,-1,Cái,12000,12000,Kho Chính - XHTB,,0,Xuất sử dụng
+SE-001,WIRE-COPPER,Dây Đồng,-0.05,Kg,50000,2500,Kho Chính - XHTB,,0,Xuất sử dụng
+SE-001,BOX-PAPER,Hộp Giấy,-1,Cái,2000,2000,Kho Chính - XHTB,,0,Xuất sử dụng
+SE-001,LAMP-5W-30LED,Đèn LED 5W (30 LED),1,Cái,44500,44500,,Kho Thành Phẩm - XHTB,1,Nhập thành phẩm
+SE-002,LED-10W,Bóng LED 10W,-1,Cái,25000,25000,Kho Chính - XHTB,,0,Xuất sử dụng
+SE-002,CAP-ALUMINUM,Thân Nhôm LED,-1,Cái,8000,8000,Kho Chính - XHTB,,0,Xuất sử dụng
+SE-002,HEAT-SINK,Quạt Tỏa Nhiệt,-1,Cái,5000,5000,Kho Chính - XHTB,,0,Xuất sử dụng
+SE-002,PCB-DRIVER,Mạch Điều Khiển LED,-2,Cái,12000,24000,Kho Chính - XHTB,,0,Xuất sử dụng
+SE-002,WIRE-COPPER,Dây Đồng,-0.1,Kg,50000,5000,Kho Chính - XHTB,,0,Xuất sử dụng
+SE-002,BOX-PAPER,Hộp Giấy,-1,Cái,2000,2000,Kho Chính - XHTB,,0,Xuất sử dụng
+SE-002,LAMP-10W-50LED,Đèn LED 10W (50 LED),1,Cái,69000,69000,,Kho Thành Phẩm - XHTB,1,Nhập thành phẩm

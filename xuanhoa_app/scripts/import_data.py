@@ -1,14 +1,16 @@
 """
 Script import dữ liệu mẫu vào ERPNext
-Chạy: bench --site erpnext.localhost execute xuanhoa_app.import_data.run
+Chạy: bench --site erpnext.localhost execute xuanhoa_app.scripts.import_data.run
 """
 
 import csv
 import os
 import frappe
 from frappe.utils import flt, cint
+from frappe.utils.password import update_password
 
-EXAMPLE_DIR = '/media/selune/Selune/Code/httt/report/example'
+# Đường dẫn thư mục example (trong app)
+EXAMPLE_DIR = os.path.join(os.path.dirname(__file__), 'example')
 COMPANY = 'Xuân Hòa Thái Bình'
 
 # Mapping UOM tiếng Việt sang tiếng Anh (ERPNext standard)
@@ -20,6 +22,54 @@ UOM_MAP = {
     'Kg': 'Kg',
     'Mét': 'Meter',
 }
+
+# Users cần tạo với roles phù hợp
+# Lưu ý: System Manager đã được cấp quyền cho tất cả DocTypes trong role_permission.csv
+# nên admin chỉ cần role System Manager là đủ
+USERS = [
+    {
+        'email': 'admin@xuanhoa.local',
+        'first_name': 'Admin',
+        'last_name': 'Hệ Thống',
+        'roles': ['System Manager'],  # Đã có full quyền qua role_permission.csv
+        'password': 'admin123'
+    },
+    {
+        'email': 'kho@xuanhoa.local',
+        'first_name': 'Quản Lý',
+        'last_name': 'Kho',
+        'roles': ['Stock Manager', 'Stock User'],
+        'password': 'kho123'
+    },
+    {
+        'email': 'sanxuat@xuanhoa.local',
+        'first_name': 'Quản Lý',
+        'last_name': 'Sản Xuất',
+        'roles': ['Manufacturing Manager', 'Manufacturing User', 'Stock User'],
+        'password': 'sanxuat123'
+    },
+    {
+        'email': 'muahang@xuanhoa.local',
+        'first_name': 'Quản Lý',
+        'last_name': 'Mua Hàng',
+        'roles': ['Purchase Manager', 'Purchase User', 'Stock User'],
+        'password': 'muahang123'
+    },
+    {
+        'email': 'banhang@xuanhoa.local',
+        'first_name': 'Quản Lý',
+        'last_name': 'Bán Hàng',
+        'roles': ['Sales Manager', 'Sales User', 'Stock User'],
+        'password': 'banhang123'
+    },
+    {
+        'email': 'ketoan@xuanhoa.local',
+        'first_name': 'Quản Lý',
+        'last_name': 'Kế Toán',
+        'roles': ['Accounts Manager', 'Accounts User'],
+        'password': 'ketoan123'
+    },
+]
 
 
 def get_uom(vietnamese_uom):
@@ -88,6 +138,150 @@ def delete_old_data():
     
     frappe.db.commit()
     print("✅ Hoàn tất xóa dữ liệu cũ")
+
+
+def setup_role_permissions():
+    """Thiết lập permissions cho các DocType từ CSV"""
+    print("\n" + "="*50)
+    print("🔐 THIẾT LẬP ROLE PERMISSIONS")
+    print("="*50)
+    
+    permissions_data = read_csv('role_permission.csv')
+    if not permissions_data:
+        print("⚠️  Không tìm thấy file role_permission.csv")
+        return 0
+    
+    # Group by doctype
+    doctypes = {}
+    for row in permissions_data:
+        dt = row['doctype']
+        if dt not in doctypes:
+            doctypes[dt] = []
+        doctypes[dt].append(row)
+    
+    count = 0
+    for doctype, perms in doctypes.items():
+        try:
+            # Check if doctype exists
+            if not frappe.db.exists('DocType', doctype):
+                print(f"  ⚠️  DocType '{doctype}' không tồn tại, bỏ qua")
+                continue
+            
+            doc = frappe.get_doc('DocType', doctype)
+            
+            for perm in perms:
+                role = perm['role']
+                
+                # Check if role exists
+                if not frappe.db.exists('Role', role):
+                    print(f"  ⚠️  Role '{role}' không tồn tại, bỏ qua")
+                    continue
+                
+                # Check if permission already exists
+                existing = None
+                for p in doc.permissions:
+                    if p.role == role:
+                        existing = p
+                        break
+                
+                if existing:
+                    # Update existing permission
+                    existing.read = cint(perm.get('read', 0))
+                    existing.write = cint(perm.get('write', 0))
+                    existing.create = cint(perm.get('create', 0))
+                    existing.delete = cint(perm.get('delete', 0))
+                    existing.submit = cint(perm.get('submit', 0))
+                    existing.cancel = cint(perm.get('cancel', 0))
+                    existing.amend = cint(perm.get('amend', 0))
+                    existing.report = cint(perm.get('report', 0))
+                    existing.export = cint(perm.get('export', 0))
+                    existing.set_user_permissions = cint(perm.get('import', 0))
+                    existing.share = cint(perm.get('share', 0))
+                    existing.print = cint(perm.get('print', 0))
+                    existing.email = cint(perm.get('email', 0))
+                else:
+                    # Add new permission
+                    doc.append('permissions', {
+                        'role': role,
+                        'read': cint(perm.get('read', 0)),
+                        'write': cint(perm.get('write', 0)),
+                        'create': cint(perm.get('create', 0)),
+                        'delete': cint(perm.get('delete', 0)),
+                        'submit': cint(perm.get('submit', 0)),
+                        'cancel': cint(perm.get('cancel', 0)),
+                        'amend': cint(perm.get('amend', 0)),
+                        'report': cint(perm.get('report', 0)),
+                        'export': cint(perm.get('export', 0)),
+                        'set_user_permissions': cint(perm.get('import', 0)),
+                        'share': cint(perm.get('share', 0)),
+                        'print': cint(perm.get('print', 0)),
+                        'email': cint(perm.get('email', 0))
+                    })
+                count += 1
+            
+            doc.save(ignore_permissions=True)
+            print(f"  ✅ {doctype}: {len(perms)} permissions")
+            
+        except Exception as e:
+            print(f"  ❌ Lỗi {doctype}: {str(e)}")
+    
+    frappe.db.commit()
+    print(f"\n✅ Đã thiết lập {count} permissions")
+    return count
+
+
+def setup_users():
+    """Tạo users với roles đầy đủ"""
+    print("\n" + "="*50)
+    print("👥 TẠO USERS")
+    print("="*50)
+    
+    count = 0
+    for u in USERS:
+        email = u['email']
+        
+        if frappe.db.exists('User', email):
+            # Update existing user's roles
+            user = frappe.get_doc('User', email)
+            existing_roles = [r.role for r in user.roles]
+            
+            for role in u['roles']:
+                if role not in existing_roles:
+                    user.append('roles', {'role': role})
+            
+            user.save(ignore_permissions=True)
+            update_password(email, u['password'])
+            print(f"  ⚠️  {email} đã tồn tại, cập nhật roles")
+        else:
+            user = frappe.get_doc({
+                'doctype': 'User',
+                'email': email,
+                'first_name': u['first_name'],
+                'last_name': u['last_name'],
+                'full_name': f"{u['first_name']} {u['last_name']}",
+                'enabled': 1,
+                'user_type': 'System User',
+                'language': 'vi',
+                'time_zone': 'Asia/Ho_Chi_Minh',
+                'send_welcome_email': 0,
+                'roles': [{'role': role} for role in u['roles']]
+            })
+            user.insert(ignore_permissions=True)
+            update_password(email, u['password'])
+            print(f"  ✅ {email} - Roles: {', '.join(u['roles'][:3])}...")
+            count += 1
+    
+    frappe.db.commit()
+    
+    # Print user table
+    print("\n" + "-"*70)
+    print(f"{'Email':<30} {'Password':<15} {'Roles':<25}")
+    print("-"*70)
+    for u in USERS:
+        roles_str = ', '.join(u['roles'][:2]) + ('...' if len(u['roles']) > 2 else '')
+        print(f"{u['email']:<30} {u['password']:<15} {roles_str:<25}")
+    
+    return count
 
 
 def import_item_groups():
@@ -462,14 +656,11 @@ def import_stock_entries():
             
             item_list.append(item_data)
         
-        # Note: Skipping work_order reference as IDs don't match
-        # Stock Entry for manufacturing should be created from Work Order in ERPNext
         doc = frappe.get_doc({
             'doctype': 'Stock Entry',
             'stock_entry_type': row['Stock Entry Type'],
             'posting_date': row['Date'],
             'company': COMPANY,
-            # 'work_order': row.get('Work Order') or None,  # Skip - IDs don't match
             'items': item_list
         })
         
@@ -514,7 +705,6 @@ def import_delivery_notes():
             } for i in items]
         })
         doc.insert(ignore_permissions=True)
-        # Submit to update stock
         doc.submit()
         count += 1
     
@@ -545,7 +735,7 @@ def import_purchase_invoices():
             'company': COMPANY,
             'bill_no': row.get('bill_no'),
             'bill_date': row.get('bill_date'),
-            'update_stock': 0,  # Stock already updated via Purchase Receipt
+            'update_stock': 0,
             'items': [{
                 'item_code': i['item_code'],
                 'qty': flt(i['qty']),
@@ -583,7 +773,7 @@ def import_sales_invoices():
             'posting_date': row['posting_date'],
             'due_date': row['due_date'],
             'company': COMPANY,
-            'update_stock': 0,  # Stock already updated via Delivery Note
+            'update_stock': 0,
             'items': [{
                 'item_code': i['item_code'],
                 'qty': flt(i['qty']),
@@ -606,6 +796,10 @@ def run():
     print("\n" + "="*60)
     print("🚀 IMPORT DỮ LIỆU MẪU ERPNext")
     print("="*60)
+    
+    # Step 0: Setup permissions and users
+    setup_role_permissions()
+    setup_users()
     
     # Step 1: Delete old data
     delete_old_data()
@@ -631,23 +825,35 @@ def run():
     # Step 4: Import stock transactions
     import_purchase_receipts()
     
-    # Note: Stock Entry (Manufacture) và Delivery Note cần được thực hiện
-    # thủ công trong ERPNext vì cần có đủ tồn kho từ quy trình sản xuất
-    # import_stock_entries()  # Skip - cần có đủ NVL
-    # import_delivery_notes()  # Skip - cần có thành phẩm trong kho
-    
-    # Step 5: Import invoices (only if stock movements are done)
-    # import_purchase_invoices()  # Skip - cần link với Purchase Receipt
-    # import_sales_invoices()  # Skip - cần link với Delivery Note
-    
     print("\n" + "="*60)
     print("🎉 HOÀN TẤT IMPORT DỮ LIỆU MẪU!")
     print("="*60)
     print("\n📝 LƯU Ý:")
+    print("  - Permissions đã được thiết lập cho các DocTypes")
+    print("  - Users đã được tạo với đầy đủ roles")
     print("  - BOM đã được submit, sẵn sàng sử dụng")
     print("  - Work Order ở trạng thái Draft, cần Submit để sản xuất")
     print("  - Purchase Receipt đã submit, tồn kho NVL đã được cập nhật")
-    print("  - Để hoàn tất quy trình:")
-    print("    1. Submit Work Order và tạo Stock Entry (Manufacture)")
-    print("    2. Tạo Delivery Note để xuất bán")
-    print("    3. Tạo Purchase/Sales Invoice để ghi nhận công nợ")
+
+
+def run_permissions_only():
+    """Chỉ chạy setup permissions và users"""
+    print("\n" + "="*60)
+    print("🔐 SETUP PERMISSIONS & USERS")
+    print("="*60)
+    
+    setup_role_permissions()
+    setup_users()
+    
+    print("\n✅ Hoàn tất!")
+
+
+def run_users_only():
+    """Chỉ tạo users"""
+    print("\n" + "="*60)
+    print("👥 TẠO USERS")
+    print("="*60)
+    
+    setup_users()
+    
+    print("\n✅ Hoàn tất!")

@@ -120,4 +120,150 @@ export const customAPI = {
     api.post(`/method/${method}`, params)
 }
 
+// ==================== STOCK APIs ====================
+
+export const stockAPI = {
+  /**
+   * Get list of items for selection
+   */
+  getItems: async () => {
+    const res = await api.post('/method/xuanhoa_app.api.get_items')
+    return res.data.message
+  },
+
+  /**
+   * Search items with query
+   */
+  searchItems: async (query, itemGroup = null) => {
+    const res = await api.post('/method/xuanhoa_app.api.search_items', { query, item_group: itemGroup })
+    return res.data.message
+  },
+
+  /**
+   * Get list of warehouses
+   */
+  getWarehouses: async (isGroup = 0) => {
+    const res = await api.post('/method/xuanhoa_app.api.get_warehouses', { is_group: isGroup })
+    return res.data.message
+  },
+
+  /**
+   * Get item stock info
+   */
+  getItemStock: async (itemCode, warehouse = null) => {
+    const res = await api.post('/method/xuanhoa_app.api.get_item_stock', { item_code: itemCode, warehouse })
+    return res.data.message
+  },
+
+  /**
+   * Create material receipt (nhập kho) - Hỗ trợ nhiều sản phẩm
+   * @param {Object} data - { items: Array, posting_date: string, remarks: string }
+   */
+  createMaterialReceipt: async (data) => {
+    const res = await api.post('/method/xuanhoa_app.api.create_material_receipt', {
+      items: JSON.stringify(data.items),
+      posting_date: data.posting_date,
+      remarks: data.remarks
+    })
+    return res.data.message
+  },
+
+  /**
+   * Create material receipt (legacy - single item)
+   */
+  createReceipt: async (itemCode, qty, warehouse, rate = null) => {
+    const res = await api.post('/method/xuanhoa_app.api.create_material_receipt', {
+      item_code: itemCode,
+      qty,
+      warehouse,
+      rate
+    })
+    return res.data.message
+  },
+
+  /**
+   * Create material issue (xuất kho)
+   */
+  createIssue: async (itemCode, qty, warehouse) => {
+    const res = await api.post('/method/xuanhoa_app.api.create_material_issue', {
+      item_code: itemCode,
+      qty,
+      warehouse
+    })
+    return res.data.message
+  },
+
+  /**
+   * Get recent stock entries
+   */
+  getStockEntries: async (params = {}) => {
+    const res = await api.post('/method/xuanhoa_app.api.get_stock_entries', params)
+    return res.data.message
+  },
+
+  /**
+   * Get stock entry detail
+   */
+  getStockEntryDetail: async (name) => {
+    const res = await api.post('/method/xuanhoa_app.api.get_stock_entry_detail', { name })
+    return res.data.message
+  },
+
+  /**
+   * Get recent stock entries (legacy alias)
+   */
+  getRecentEntries: async (purpose = null, limit = 20) => {
+    const res = await api.post('/method/xuanhoa_app.api.get_stock_entries', { purpose, limit })
+    return res.data.message
+  }
+}
+
+// ==================== WORK ORDER APIs ====================
+
+export const workOrderAPI = {
+  /**
+   * Get list of work orders
+   */
+  getList: (status = null, limit = 20) => 
+    api.post('/method/xuanhoa_app.api.get_work_orders', { status, limit }),
+
+  /**
+   * Get work order detail
+   */
+  getDetail: (name) => 
+    api.post('/method/xuanhoa_app.api.get_work_order_detail', { work_order_name: name }),
+
+  /**
+   * Start work order (transfer materials)
+   */
+  start: (name) => 
+    api.post('/method/xuanhoa_app.api.start_work_order', { work_order_name: name }),
+
+  /**
+   * Complete work order (manufacture)
+   */
+  complete: (name, qty) => 
+    api.post('/method/xuanhoa_app.api.complete_work_order', { work_order_name: name, qty })
+}
+
+// ==================== DASHBOARD APIs ====================
+
+export const dashboardAPI = {
+  /**
+   * Get KPI data for dashboard
+   */
+  getKPI: async () => {
+    const res = await api.post('/method/xuanhoa_app.api.get_dashboard_kpi')
+    return res.data.message
+  },
+
+  /**
+   * Get recent activities for dashboard
+   */
+  getRecentActivities: async (limit = 10) => {
+    const res = await api.post('/method/xuanhoa_app.api.get_recent_activities', { limit })
+    return res.data.message
+  }
+}
+
 export default api

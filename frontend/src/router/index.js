@@ -41,6 +41,27 @@ const routes = [
         meta: { title: 'Nhập kho' }
       },
       {
+        path: 'stock/receipts',
+        name: 'StockReceiptList',
+        redirect: '/stock/entries?type=Material%20Receipt'
+      },
+      {
+        path: 'stock/entries',
+        name: 'StockEntryList',
+        component: () => import('@/pages/stock/StockEntryList.vue'),
+        meta: { title: 'Danh sách phiếu kho' }
+      },
+      {
+        path: 'stock/receipts/:name',
+        redirect: to => ({ path: `/stock/entries/${to.params.name}` })
+      },
+      {
+        path: 'stock/entries/:name',
+        name: 'StockEntryDetail',
+        component: () => import('@/pages/stock/StockEntryDetail.vue'),
+        meta: { title: 'Chi tiết phiếu kho' }
+      },
+      {
         path: 'stock/issue',
         name: 'MaterialIssue',
         component: () => import('@/pages/stock/MaterialIssue.vue'),

@@ -1,0 +1,5 @@
+parent,parenttype,parentfield,item_code,item_name,qty,rate,amount,uom,warehouse,income_account
+SINV-001,Sales Invoice,items,LAMP-5W-30LED,Đèn LED 5W (30 LED),20,80000,1600000,Cái,Kho Chính - XHTB,Sales - XHTB
+SINV-001,Sales Invoice,items,LAMP-10W-50LED,Đèn LED 10W (50 LED),15,140000,2100000,Cái,Kho Chính - XHTB,Sales - XHTB
+SINV-002,Sales Invoice,items,SPOTLIGHT-30W,Đèn Chiếu Sáng 30W,10,250000,2500000,Cái,Kho Chính - XHTB,Sales - XHTB
+SINV-003,Sales Invoice,items,LAMP-5W-30LED,Đèn LED 5W (30 LED),5,80000,400000,Cái,Kho Chính - XHTB,Sales - XHTB

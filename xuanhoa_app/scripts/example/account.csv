@@ -1,0 +1,30 @@
+account_name,account_number,company,parent_account,root_type,report_type,account_type,is_group,account_currency
+Application of Funds (Assets),1,XUÂN HÒA THÁI BÌNH,,Asset,Balance Sheet,,1,VND
+Current Assets,11,XUÂN HÒA THÁI BÌNH,Application of Funds (Assets) - XHTB,Asset,Balance Sheet,,1,VND
+Accounts Receivable,1110,XUÂN HÒA THÁI BÌNH,Current Assets - XHTB,Asset,Balance Sheet,Receivable,0,VND
+Bank Accounts,1120,XUÂN HÒA THÁI BÌNH,Current Assets - XHTB,Asset,Balance Sheet,,1,VND
+Vietcombank - XHTB,11201,XUÂN HÒA THÁI BÌNH,Bank Accounts - XHTB,Asset,Balance Sheet,Bank,0,VND
+Cash,1130,XUÂN HÒA THÁI BÌNH,Current Assets - XHTB,Asset,Balance Sheet,Cash,0,VND
+Stock Assets,1140,XUÂN HÒA THÁI BÌNH,Current Assets - XHTB,Asset,Balance Sheet,Stock,0,VND
+Fixed Assets,12,XUÂN HÒA THÁI BÌNH,Application of Funds (Assets) - XHTB,Asset,Balance Sheet,,1,VND
+Capital Equipment,1210,XUÂN HÒA THÁI BÌNH,Fixed Assets - XHTB,Asset,Balance Sheet,Fixed Asset,0,VND
+Source of Funds (Liabilities),2,XUÂN HÒA THÁI BÌNH,,Liability,Balance Sheet,,1,VND
+Current Liabilities,21,XUÂN HÒA THÁI BÌNH,Source of Funds (Liabilities) - XHTB,Liability,Balance Sheet,,1,VND
+Accounts Payable,2110,XUÂN HÒA THÁI BÌNH,Current Liabilities - XHTB,Liability,Balance Sheet,Payable,0,VND
+Stock Liabilities,2120,XUÂN HÒA THÁI BÌNH,Current Liabilities - XHTB,Liability,Balance Sheet,Stock Received But Not Billed,0,VND
+Duties and Taxes,2130,XUÂN HÒA THÁI BÌNH,Current Liabilities - XHTB,Liability,Balance Sheet,Tax,0,VND
+Equity,3,XUÂN HÒA THÁI BÌNH,,Equity,Balance Sheet,,1,VND
+Capital Stock,3100,XUÂN HÒA THÁI BÌNH,Equity - XHTB,Equity,Balance Sheet,Equity,0,VND
+Retained Earnings,3200,XUÂN HÒA THÁI BÌNH,Equity - XHTB,Equity,Balance Sheet,Equity,0,VND
+Income,4,XUÂN HÒA THÁI BÌNH,,Income,Profit and Loss,,1,VND
+Direct Income,41,XUÂN HÒA THÁI BÌNH,Income - XHTB,Income,Profit and Loss,,1,VND
+Sales,4100,XUÂN HÒA THÁI BÌNH,Direct Income - XHTB,Income,Profit and Loss,Income Account,0,VND
+Service,4200,XUÂN HÒA THÁI BÌNH,Direct Income - XHTB,Income,Profit and Loss,Income Account,0,VND
+Indirect Income,42,XUÂN HÒA THÁI BÌNH,Income - XHTB,Income,Profit and Loss,,1,VND
+Expenses,5,XUÂN HÒA THÁI BÌNH,,Expense,Profit and Loss,,1,VND
+Direct Expenses,51,XUÂN HÒA THÁI BÌNH,Expenses - XHTB,Expense,Profit and Loss,,1,VND
+Cost of Goods Sold,5100,XUÂN HÒA THÁI BÌNH,Direct Expenses - XHTB,Expense,Profit and Loss,Cost of Goods Sold,0,VND
+Stock Adjustment,5200,XUÂN HÒA THÁI BÌNH,Direct Expenses - XHTB,Expense,Profit and Loss,Stock Adjustment,0,VND
+Indirect Expenses,52,XUÂN HÒA THÁI BÌNH,Expenses - XHTB,Expense,Profit and Loss,,1,VND
+Administrative Expenses,5210,XUÂN HÒA THÁI BÌNH,Indirect Expenses - XHTB,Expense,Profit and Loss,Expense Account,0,VND
+Marketing Expenses,5220,XUÂN HÒA THÁI BÌNH,Indirect Expenses - XHTB,Expense,Profit and Loss,Expense Account,0,VND

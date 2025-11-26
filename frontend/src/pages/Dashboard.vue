@@ -14,8 +14,8 @@
           <div>
             <p class="text-sm text-gray-500 mb-1">{{ kpi.label }}</p>
             <p class="text-2xl font-bold text-gray-800">{{ kpi.value }}</p>
-            <p :class="['text-sm mt-1', kpi.trend > 0 ? 'text-success' : 'text-error']">
-              <span v-if="kpi.trend > 0">↑</span>
+            <p v-if="kpi.trend !== undefined" :class="['text-sm mt-1', kpi.trend >= 0 ? 'text-success' : 'text-error']">
+              <span v-if="kpi.trend >= 0">↑</span>
               <span v-else>↓</span>
               {{ Math.abs(kpi.trend) }}% so với tuần trước
             </p>
@@ -49,12 +49,36 @@
 
     <!-- Recent Activity -->
     <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-      <h3 class="text-lg font-semibold text-gray-800 mb-4">Hoạt động gần đây</h3>
-      <div class="space-y-4">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-lg font-semibold text-gray-800">Hoạt động gần đây</h3>
+        <button 
+          @click="loadRecentActivities"
+          class="text-sm text-primary hover:text-primary-dark flex items-center gap-1"
+        >
+          <RefreshIcon class="w-4 h-4" />
+          Làm mới
+        </button>
+      </div>
+      
+      <!-- Loading state -->
+      <div v-if="loadingActivities" class="flex justify-center py-8">
+        <svg class="animate-spin h-8 w-8 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+      </div>
+      
+      <!-- Empty state -->
+      <div v-else-if="recentActivities.length === 0" class="text-center py-8 text-gray-500">
+        Chưa có hoạt động nào
+      </div>
+      
+      <!-- Activities list -->
+      <div v-else class="space-y-4">
         <div v-for="activity in recentActivities" :key="activity.id"
              class="flex items-start gap-4 p-3 rounded-lg hover:bg-gray-50 transition-colors">
-          <div :class="['w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0', activity.bgColor]">
-            <component :is="activity.icon" :class="['w-5 h-5', activity.iconColor]" />
+          <div :class="['w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0', getActivityBgColor(activity.type)]">
+            <component :is="getActivityIcon(activity.type)" :class="['w-5 h-5', getActivityIconColor(activity.type)]" />
           </div>
           <div class="flex-1 min-w-0">
             <p class="text-sm text-gray-800 font-medium">{{ activity.title }}</p>
@@ -75,10 +99,16 @@
 </template>
 
 <script setup>
-import { h, computed } from 'vue'
+import { h, ref, computed, onMounted } from 'vue'
 import { useUserStore } from '@/stores/user'
+import { dashboardAPI } from '@/api'
 
 const userStore = useUserStore()
+
+// State
+const loadingActivities = ref(false)
+const recentActivities = ref([])
+const kpiData = ref(null)
 
 // Icon components
 const BoxIcon = {
@@ -147,45 +177,97 @@ const CheckIcon = {
   ])
 }
 
-// KPI Cards data
-const kpiCards = computed(() => [
-  {
-    id: 1,
-    label: 'Lệnh SX đang chạy',
-    value: '12',
-    trend: 8,
-    icon: ClipboardIcon,
-    bgColor: 'bg-primary/10',
-    iconColor: 'text-primary'
-  },
-  {
-    id: 2,
-    label: 'Tồn kho NVL',
-    value: '2,450',
-    trend: -3,
-    icon: BoxIcon,
-    bgColor: 'bg-warning/10',
-    iconColor: 'text-warning'
-  },
-  {
-    id: 3,
-    label: 'Xuất kho hôm nay',
-    value: '156',
-    trend: 12,
-    icon: TruckIcon,
-    bgColor: 'bg-success/10',
-    iconColor: 'text-success'
-  },
-  {
-    id: 4,
-    label: 'Hiệu suất',
-    value: '94%',
-    trend: 5,
-    icon: ChartIcon,
-    bgColor: 'bg-info/10',
-    iconColor: 'text-info'
+const RefreshIcon = {
+  render: () => h('svg', { fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' }, [
+    h('path', { 
+      'stroke-linecap': 'round', 
+      'stroke-linejoin': 'round', 
+      'stroke-width': '2',
+      d: 'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15'
+    })
+  ])
+}
+
+// Helper functions for activity styling
+const getActivityIcon = (type) => {
+  const icons = {
+    receipt: BoxIcon,
+    issue: TruckIcon,
+    manufacture: CheckIcon,
+    transfer: ClipboardIcon
   }
-])
+  return icons[type] || BoxIcon
+}
+
+const getActivityBgColor = (type) => {
+  const colors = {
+    receipt: 'bg-success/10',
+    issue: 'bg-info/10',
+    manufacture: 'bg-primary/10',
+    transfer: 'bg-warning/10'
+  }
+  return colors[type] || 'bg-gray-100'
+}
+
+const getActivityIconColor = (type) => {
+  const colors = {
+    receipt: 'text-success',
+    issue: 'text-info',
+    manufacture: 'text-primary',
+    transfer: 'text-warning'
+  }
+  return colors[type] || 'text-gray-500'
+}
+
+// Format number with Vietnamese locale
+const formatNumber = (num) => {
+  if (!num) return '0'
+  return new Intl.NumberFormat('vi-VN').format(num)
+}
+
+// KPI Cards data
+const kpiCards = computed(() => {
+  const data = kpiData.value
+  
+  // Tính tổng Work Orders đang chạy
+  const woInProgress = data?.work_orders?.['In Process'] || 0
+  const woNotStarted = data?.work_orders?.['Not Started'] || 0
+  
+  return [
+    {
+      id: 1,
+      label: 'Lệnh SX đang chạy',
+      value: woInProgress + woNotStarted,
+      icon: ClipboardIcon,
+      bgColor: 'bg-primary/10',
+      iconColor: 'text-primary'
+    },
+    {
+      id: 2,
+      label: 'Giá trị tồn kho',
+      value: formatNumber(Math.round((data?.stock_value || 0) / 1000)) + 'K',
+      icon: BoxIcon,
+      bgColor: 'bg-warning/10',
+      iconColor: 'text-warning'
+    },
+    {
+      id: 3,
+      label: 'Nhập kho hôm nay',
+      value: data?.receipts_today || 0,
+      icon: PlusIcon,
+      bgColor: 'bg-success/10',
+      iconColor: 'text-success'
+    },
+    {
+      id: 4,
+      label: 'Xuất kho hôm nay',
+      value: data?.issues_today || 0,
+      icon: TruckIcon,
+      bgColor: 'bg-info/10',
+      iconColor: 'text-info'
+    }
+  ]
+})
 
 // Quick actions
 const quickActions = [
@@ -195,43 +277,32 @@ const quickActions = [
   { path: '/', label: 'Báo cáo', icon: ChartIcon }
 ]
 
-// Recent activities
-const recentActivities = [
-  {
-    id: 1,
-    title: 'Nhập kho IC Driver 500 cái',
-    description: 'Từ NCC Điện tử ABC',
-    time: '5 phút trước',
-    user: 'Quản Lý Kho',
-    userInitial: 'K',
-    approver: 'Admin Hệ Thống',
-    icon: BoxIcon,
-    bgColor: 'bg-success/10',
-    iconColor: 'text-success'
-  },
-  {
-    id: 2,
-    title: 'Hoàn thành LSX #WO-2024-0045',
-    description: 'Đèn LED Bulb 9W - 1,000 cái',
-    time: '15 phút trước',
-    user: 'Quản Lý Sản Xuất',
-    userInitial: 'S',
-    approver: null,
-    icon: CheckIcon,
-    bgColor: 'bg-primary/10',
-    iconColor: 'text-primary'
-  },
-  {
-    id: 3,
-    title: 'Xuất kho thành phẩm',
-    description: 'Đơn hàng #SO-2024-0123',
-    time: '1 giờ trước',
-    user: 'Quản Lý Kho',
-    userInitial: 'K',
-    approver: 'Quản Lý Bán Hàng',
-    icon: TruckIcon,
-    bgColor: 'bg-info/10',
-    iconColor: 'text-info'
+// Load recent activities
+const loadRecentActivities = async () => {
+  loadingActivities.value = true
+  try {
+    const activities = await dashboardAPI.getRecentActivities(10)
+    recentActivities.value = activities || []
+  } catch (error) {
+    console.error('Error loading recent activities:', error)
+    recentActivities.value = []
+  } finally {
+    loadingActivities.value = false
   }
-]
+}
+
+// Load KPI data
+const loadKPIData = async () => {
+  try {
+    kpiData.value = await dashboardAPI.getKPI()
+  } catch (error) {
+    console.error('Error loading KPI data:', error)
+  }
+}
+
+// Initialize
+onMounted(() => {
+  loadKPIData()
+  loadRecentActivities()
+})
 </script>

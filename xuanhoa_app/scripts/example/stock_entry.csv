@@ -1,0 +1,3 @@
+Stock Entry No,Date,Stock Entry Type,From Warehouse,To Warehouse,Work Order,Purpose,Status
+SE-001,2024-01-18,Manufacture,Kho Chính - XHTB,Kho Thành Phẩm - XHTB,WO-001,Sản xuất Đèn LED 5W,Draft
+SE-002,2024-01-19,Manufacture,Kho Chính - XHTB,Kho Thành Phẩm - XHTB,WO-002,Sản xuất Đèn LED 10W,Draft

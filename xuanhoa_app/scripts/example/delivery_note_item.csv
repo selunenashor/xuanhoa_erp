@@ -1,0 +1,5 @@
+Delivery Note No,Item Code,Item Name,Qty,UOM,Rate,Amount,Warehouse
+DN-001,LAMP-5W-30LED,Đèn LED 5W (30 LED),20,Cái,80000,1600000,Kho Thành Phẩm - XHTB
+DN-001,LAMP-10W-50LED,Đèn LED 10W (50 LED),15,Cái,140000,2100000,Kho Thành Phẩm - XHTB
+DN-002,SPOTLIGHT-30W,Đèn Chiếu Sáng 30W,10,Cái,250000,2500000,Kho Thành Phẩm - XHTB
+DN-003,LAMP-5W-30LED,Đèn LED 5W (30 LED),5,Cái,80000,400000,Kho Thành Phẩm - XHTB

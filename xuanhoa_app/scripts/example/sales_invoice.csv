@@ -1,0 +1,4 @@
+name,naming_series,customer,posting_date,due_date,company,debit_to,grand_total,outstanding_amount,is_return,status,currency
+SINV-001,ACC-SINV-.YYYY.-,Đại Lí Bắc Kỳ,2024-01-20,2024-02-20,XUÂN HÒA THÁI BÌNH,Accounts Receivable - XHTB,3700000,0,0,Paid,VND
+SINV-002,ACC-SINV-.YYYY.-,Đại Lí Nam Bộ,2024-01-21,2024-02-21,XUÂN HÒA THÁI BÌNH,Accounts Receivable - XHTB,2500000,2500000,0,Unpaid,VND
+SINV-003,ACC-SINV-.YYYY.-,Cửa Hàng Điện Tử ABC,2024-01-22,2024-02-22,XUÂN HÒA THÁI BÌNH,Accounts Receivable - XHTB,400000,200000,0,Partly Paid,VND

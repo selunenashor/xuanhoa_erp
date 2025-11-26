@@ -16,39 +16,86 @@ from frappe import _
 # ============================================
 
 @frappe.whitelist()
-def create_material_receipt(item_code, qty, warehouse, rate=None):
+def create_material_receipt(items=None, posting_date=None, remarks=None, item_code=None, qty=None, warehouse=None, rate=None):
     """
-    Tạo phiếu nhập kho đơn giản
+    Tạo phiếu nhập kho - Hỗ trợ 1 hoặc nhiều sản phẩm
     
     Args:
-        item_code: Mã hàng hóa
+        items: Danh sách sản phẩm (JSON array)
+            [{"item_code": "NVL-001", "qty": 100, "basic_rate": 1000, "t_warehouse": "Kho Chính"}]
+        posting_date: Ngày nhập (YYYY-MM-DD)
+        remarks: Ghi chú
+        
+        # Legacy params (tương thích ngược)
+        item_code: Mã hàng hóa (nếu nhập 1 sản phẩm)
         qty: Số lượng nhập
         warehouse: Kho nhập (target warehouse)
-        rate: Đơn giá (tùy chọn, nếu không có sẽ lấy từ Item)
+        rate: Đơn giá
     
     Returns:
         dict: {success: bool, name: str, message: str}
     
-    Example:
+    Example (Multi-item):
+        POST /api/method/xuanhoa_app.api.create_material_receipt
+        {
+            "items": [
+                {"item_code": "NVL-001", "qty": 100, "basic_rate": 1000, "t_warehouse": "Kho Chính - XHTB"},
+                {"item_code": "NVL-002", "qty": 50, "basic_rate": 500, "t_warehouse": "Kho Chính - XHTB"}
+            ],
+            "posting_date": "2025-01-15",
+            "remarks": "Nhập hàng theo PO-001"
+        }
+    
+    Example (Single item - Legacy):
         POST /api/method/xuanhoa_app.api.create_material_receipt
         {
             "item_code": "NVL-001",
             "qty": 100,
-            "warehouse": "Kho Chính - XHTB"
+            "warehouse": "Kho Chính - XHTB",
+            "rate": 1000
         }
     """
+    import json
+    
     try:
         doc = frappe.new_doc("Stock Entry")
         doc.purpose = "Material Receipt"
         doc.stock_entry_type = "Material Receipt"
         doc.company = frappe.defaults.get_user_default("Company") or "XUÂN HÒA THÁI BÌNH"
         
-        row = doc.append("items", {})
-        row.item_code = item_code
-        row.qty = float(qty)
-        row.t_warehouse = warehouse
-        if rate:
-            row.basic_rate = float(rate)
+        if posting_date:
+            doc.posting_date = posting_date
+        
+        if remarks:
+            doc.remarks = remarks
+        
+        # Parse items if it's a JSON string
+        if items and isinstance(items, str):
+            items = json.loads(items)
+        
+        # Multi-item mode
+        if items and isinstance(items, list) and len(items) > 0:
+            for item_data in items:
+                row = doc.append("items", {})
+                row.item_code = item_data.get("item_code")
+                row.qty = float(item_data.get("qty", 0))
+                row.t_warehouse = item_data.get("t_warehouse")
+                if item_data.get("basic_rate"):
+                    row.basic_rate = float(item_data.get("basic_rate"))
+        
+        # Legacy single-item mode
+        elif item_code and qty and warehouse:
+            row = doc.append("items", {})
+            row.item_code = item_code
+            row.qty = float(qty)
+            row.t_warehouse = warehouse
+            if rate:
+                row.basic_rate = float(rate)
+        else:
+            return {
+                "success": False,
+                "message": _("Vui lòng cung cấp danh sách sản phẩm")
+            }
         
         doc.insert()
         doc.submit()
@@ -64,6 +111,176 @@ def create_material_receipt(item_code, qty, warehouse, rate=None):
             "success": False,
             "message": str(e)
         }
+
+
+@frappe.whitelist()
+def get_stock_entries(purpose=None, stock_entry_type=None, limit=20, offset=0, search=None, from_date=None, to_date=None, warehouse=None, page=None, page_size=None):
+    """
+    Lấy danh sách Stock Entry (phiếu nhập/xuất kho) với tìm kiếm, filter và phân trang
+    
+    Args:
+        purpose: Loại phiếu (Material Receipt, Material Issue, Manufacture, etc.)
+        stock_entry_type: Loại Stock Entry (Material Receipt, Material Issue, etc.)
+        limit: Số lượng kết quả tối đa (mặc định 20)
+        offset: Vị trí bắt đầu (dùng cho phân trang)
+        page: Số trang (1-based, dùng thay cho offset)
+        page_size: Số bản ghi mỗi trang (dùng thay cho limit)
+        search: Từ khóa tìm kiếm (mã phiếu, tên item)
+        from_date: Ngày bắt đầu (YYYY-MM-DD)
+        to_date: Ngày kết thúc (YYYY-MM-DD)
+        warehouse: Lọc theo kho
+    
+    Returns:
+        dict: {data: list, total: int, page: int, page_size: int, total_pages: int}
+    """
+    # Hỗ trợ cả offset/limit và page/page_size
+    if page is not None and page_size is not None:
+        page = int(page)
+        page_size = int(page_size)
+        limit = page_size
+        offset = (page - 1) * page_size
+    else:
+        limit = int(limit)
+        offset = int(offset)
+        page_size = limit
+        page = (offset // limit) + 1 if limit > 0 else 1
+    
+    filters = {}  # Lấy cả draft và submitted
+    if purpose:
+        filters["purpose"] = purpose
+    if stock_entry_type:
+        filters["stock_entry_type"] = stock_entry_type
+    if from_date:
+        filters["posting_date"] = [">=", from_date]
+    if to_date:
+        if "posting_date" in filters:
+            filters["posting_date"] = ["between", [from_date, to_date]]
+        else:
+            filters["posting_date"] = ["<=", to_date]
+    
+    # Tìm kiếm theo mã phiếu
+    if search:
+        filters["name"] = ["like", f"%{search}%"]
+    
+    # Đếm tổng số bản ghi
+    total_count = frappe.db.count("Stock Entry", filters=filters)
+    
+    entries = frappe.get_all(
+        "Stock Entry",
+        filters=filters,
+        fields=[
+            "name", "purpose", "stock_entry_type", "posting_date",
+            "posting_time", "company", "docstatus", "creation",
+            "owner", "modified_by", "remarks", "total_outgoing_value",
+            "total_incoming_value", "total_amount"
+        ],
+        order_by="creation desc",
+        limit_start=offset,
+        limit_page_length=limit
+    )
+    
+    # Lấy thông tin items cho mỗi entry
+    for entry in entries:
+        items = frappe.get_all(
+            "Stock Entry Detail",
+            filters={"parent": entry.name},
+            fields=[
+                "item_code", "item_name", "qty", "uom",
+                "s_warehouse", "t_warehouse", "basic_rate", "amount"
+            ]
+        )
+        entry["items"] = items
+        
+        # Lấy warehouse đích (cho Material Receipt) hoặc nguồn (cho Material Issue)
+        if items:
+            entry["to_warehouse"] = items[0].get("t_warehouse")
+            entry["from_warehouse"] = items[0].get("s_warehouse")
+        
+        # Lấy tên người thực hiện
+        entry["owner_name"] = frappe.db.get_value("User", entry.owner, "full_name") or entry.owner
+        
+        # Tính tổng số lượng items
+        entry["total_qty"] = sum(item.get("qty", 0) for item in items)
+        entry["item_count"] = len(items)
+    
+    # Lọc theo warehouse nếu có
+    if warehouse:
+        entries = [e for e in entries if e.get("to_warehouse") == warehouse or e.get("from_warehouse") == warehouse]
+        # Cập nhật total_count nếu có filter warehouse
+        total_count = len(entries)
+    
+    # Tính tổng số trang
+    total_pages = (total_count + page_size - 1) // page_size if page_size > 0 else 1
+    
+    return {
+        "data": entries,
+        "total": total_count,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": total_pages
+    }
+
+
+@frappe.whitelist()
+def get_stock_entry_detail(name):
+    """
+    Lấy chi tiết một Stock Entry
+    
+    Args:
+        name: Mã phiếu (MAT-STE-YYYY-XXXXX)
+    
+    Returns:
+        dict: Chi tiết phiếu với items
+    """
+    if not frappe.db.exists("Stock Entry", name):
+        return {"success": False, "message": _("Không tìm thấy phiếu {0}").format(name)}
+    
+    doc = frappe.get_doc("Stock Entry", name)
+    
+    # Lấy thông tin items
+    items = []
+    for item in doc.items:
+        items.append({
+            "item_code": item.item_code,
+            "item_name": item.item_name,
+            "qty": item.qty,
+            "uom": item.uom,
+            "s_warehouse": item.s_warehouse,
+            "t_warehouse": item.t_warehouse,
+            "basic_rate": item.basic_rate,
+            "valuation_rate": item.valuation_rate,
+            "amount": item.amount,
+            "batch_no": item.batch_no,
+            "serial_no": item.serial_no
+        })
+    
+    # Lấy tên người thực hiện
+    owner_name = frappe.db.get_value("User", doc.owner, "full_name") or doc.owner
+    modified_by_name = frappe.db.get_value("User", doc.modified_by, "full_name") or doc.modified_by
+    
+    return {
+        "success": True,
+        "name": doc.name,
+        "purpose": doc.purpose,
+        "stock_entry_type": doc.stock_entry_type,
+        "posting_date": str(doc.posting_date),
+        "posting_time": str(doc.posting_time),
+        "company": doc.company,
+        "docstatus": doc.docstatus,
+        "remarks": doc.remarks,
+        "total_outgoing_value": doc.total_outgoing_value,
+        "total_incoming_value": doc.total_incoming_value,
+        "total_amount": doc.total_amount,
+        "items": items,
+        "owner": doc.owner,
+        "owner_name": owner_name,
+        "modified_by": doc.modified_by,
+        "modified_by_name": modified_by_name,
+        "creation": str(doc.creation),
+        "modified": str(doc.modified),
+        "to_warehouse": items[0].get("t_warehouse") if items else None,
+        "from_warehouse": items[0].get("s_warehouse") if items else None
+    }
 
 
 @frappe.whitelist()
@@ -316,6 +533,139 @@ def get_dashboard_kpi():
     }
 
 
+@frappe.whitelist()
+def get_recent_activities(limit=10):
+    """
+    Lấy hoạt động gần đây cho Dashboard
+    
+    Bao gồm:
+    - Phiếu nhập/xuất kho đã duyệt
+    - Work Order hoàn thành
+    - Các giao dịch Stock Entry
+    
+    Returns:
+        list: Danh sách hoạt động gần đây
+    """
+    from frappe.utils import time_diff_in_seconds, now_datetime
+    
+    activities = []
+    
+    # Lấy Stock Entry gần đây (nhập/xuất kho)
+    stock_entries = frappe.get_all(
+        "Stock Entry",
+        filters={"docstatus": 1},
+        fields=[
+            "name", "purpose", "stock_entry_type", "posting_date", "posting_time",
+            "creation", "owner", "modified_by", "modified"
+        ],
+        order_by="modified desc",
+        limit=int(limit)
+    )
+    
+    for entry in stock_entries:
+        # Lấy thông tin items
+        items = frappe.get_all(
+            "Stock Entry Detail",
+            filters={"parent": entry.name},
+            fields=["item_code", "item_name", "qty", "uom", "t_warehouse", "s_warehouse"]
+        )
+        
+        # Xây dựng description
+        if items:
+            first_item = items[0]
+            item_count = len(items)
+            if entry.purpose == "Material Receipt":
+                desc = f"{first_item.item_name} - {first_item.qty} {first_item.uom}"
+                if first_item.t_warehouse:
+                    desc += f" vào {first_item.t_warehouse.split(' - ')[0]}"
+                if item_count > 1:
+                    desc += f" (+{item_count - 1} sản phẩm khác)"
+            elif entry.purpose == "Material Issue":
+                desc = f"{first_item.item_name} - {first_item.qty} {first_item.uom}"
+                if first_item.s_warehouse:
+                    desc += f" từ {first_item.s_warehouse.split(' - ')[0]}"
+                if item_count > 1:
+                    desc += f" (+{item_count - 1} sản phẩm khác)"
+            elif entry.purpose == "Manufacture":
+                desc = f"Hoàn thành sản xuất {first_item.item_name} - {first_item.qty} {first_item.uom}"
+            else:
+                desc = f"{first_item.item_name} - {first_item.qty} {first_item.uom}"
+        else:
+            desc = entry.purpose
+        
+        # Lấy tên người thực hiện
+        owner_name = frappe.db.get_value("User", entry.owner, "full_name") or entry.owner
+        owner_initial = owner_name[0].upper() if owner_name else "?"
+        
+        # Lấy tên người duyệt (modified_by nếu khác owner)
+        approver = None
+        if entry.modified_by and entry.modified_by != entry.owner:
+            approver = frappe.db.get_value("User", entry.modified_by, "full_name") or entry.modified_by
+        
+        # Tính thời gian
+        time_ago = get_time_ago(entry.modified)
+        
+        # Xác định loại activity
+        activity_type = "receipt" if entry.purpose == "Material Receipt" else \
+                       "issue" if entry.purpose == "Material Issue" else \
+                       "manufacture" if entry.purpose == "Manufacture" else "transfer"
+        
+        # Xác định title
+        title_map = {
+            "Material Receipt": f"Nhập kho {entry.name}",
+            "Material Issue": f"Xuất kho {entry.name}",
+            "Manufacture": f"Hoàn thành sản xuất {entry.name}",
+            "Material Transfer for Manufacture": f"Cấp phát NVL {entry.name}",
+        }
+        title = title_map.get(entry.purpose, f"{entry.purpose} {entry.name}")
+        
+        activities.append({
+            "id": entry.name,
+            "type": activity_type,
+            "title": title,
+            "description": desc,
+            "time": time_ago,
+            "timestamp": str(entry.modified),
+            "user": owner_name,
+            "userInitial": owner_initial,
+            "approver": approver,
+            "doctype": "Stock Entry",
+            "docname": entry.name
+        })
+    
+    # Sắp xếp theo thời gian
+    activities.sort(key=lambda x: x["timestamp"], reverse=True)
+    
+    return activities[:int(limit)]
+
+
+def get_time_ago(dt):
+    """
+    Chuyển đổi datetime thành chuỗi "X phút trước", "X giờ trước"
+    """
+    from frappe.utils import now_datetime, time_diff_in_seconds
+    
+    if not dt:
+        return ""
+    
+    seconds = time_diff_in_seconds(now_datetime(), dt)
+    
+    if seconds < 60:
+        return "Vừa xong"
+    elif seconds < 3600:
+        minutes = int(seconds / 60)
+        return f"{minutes} phút trước"
+    elif seconds < 86400:
+        hours = int(seconds / 3600)
+        return f"{hours} giờ trước"
+    elif seconds < 604800:
+        days = int(seconds / 86400)
+        return f"{days} ngày trước"
+    else:
+        weeks = int(seconds / 604800)
+        return f"{weeks} tuần trước"
+
+
 # ============================================
 # ITEM APIs
 # ============================================
@@ -329,6 +679,9 @@ def search_items(query, item_group=None, limit=10):
         query: Từ khóa tìm kiếm
         item_group: Lọc theo nhóm hàng (tùy chọn)
         limit: Số kết quả tối đa
+    
+    Returns:
+        list: Danh sách items với giá và số lượng tồn kho
     """
     filters = {"is_stock_item": 1, "disabled": 0}
     if item_group:
@@ -341,9 +694,30 @@ def search_items(query, item_group=None, limit=10):
             "item_code": ["like", f"%{query}%"],
             "item_name": ["like", f"%{query}%"]
         },
-        fields=["item_code", "item_name", "stock_uom", "item_group", "image"],
+        fields=["item_code", "item_name", "stock_uom", "item_group", "image", "standard_rate", "valuation_rate"],
         limit=int(limit)
     )
+    
+    # Thêm thông tin tồn kho từ Bin
+    for item in items:
+        # Lấy tổng tồn kho từ tất cả kho
+        bin_data = frappe.db.sql("""
+            SELECT SUM(actual_qty) as total_qty, 
+                   MAX(valuation_rate) as bin_valuation_rate
+            FROM `tabBin` 
+            WHERE item_code = %s
+        """, item.item_code, as_dict=True)
+        
+        if bin_data and bin_data[0]:
+            item["actual_qty"] = bin_data[0].get("total_qty") or 0
+            # Ưu tiên valuation_rate từ Bin, rồi đến standard_rate từ Item
+            if bin_data[0].get("bin_valuation_rate"):
+                item["valuation_rate"] = bin_data[0].get("bin_valuation_rate")
+        else:
+            item["actual_qty"] = 0
+        
+        # Đảm bảo có rate để frontend sử dụng
+        item["rate"] = item.get("valuation_rate") or item.get("standard_rate") or 0
     
     return items
 
@@ -385,17 +759,20 @@ def get_item_stock(item_code, warehouse=None):
 @frappe.whitelist()
 def get_warehouses(is_group=None):
     """
-    Lấy danh sách kho
+    Lấy danh sách kho (chỉ lấy kho không bị disabled và không phải group)
     """
     filters = {"disabled": 0}
     if is_group is not None:
         filters["is_group"] = int(is_group)
+    else:
+        # Mặc định chỉ lấy kho leaf (không phải group)
+        filters["is_group"] = 0
     
     return frappe.get_all(
         "Warehouse",
         filters=filters,
         fields=["name", "warehouse_name", "parent_warehouse", "is_group", "warehouse_type"],
-        order_by="name"
+        order_by="warehouse_name"
     )
 
 

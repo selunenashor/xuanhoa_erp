@@ -1,0 +1,11 @@
+Item Code,Item Name,Item Group,Default Unit of Measure,Description,Is Stock Item,Include Item In Manufacturing,Maintain Stock,Valuation Method,Standard Selling Rate
+LED-5W,Bóng LED 5W,Linh Kiện Điện,Cái,Bóng LED 5W siêu sáng,1,1,1,FIFO,15000
+LED-10W,Bóng LED 10W,Linh Kiện Điện,Cái,Bóng LED 10W siêu sáng,1,1,1,FIFO,25000
+CAP-ALUMINUM,Thân Nhôm LED,Linh Kiện Cơ Khí,Cái,Thân nhôm chứa tỏa nhiệt,1,1,1,FIFO,8000
+HEAT-SINK,Quạt Tỏa Nhiệt,Linh Kiện Cơ Khí,Cái,Quạt tỏa nhiệt,1,1,1,FIFO,5000
+PCB-DRIVER,Mạch Điều Khiển LED,Linh Kiện Điện,Cái,PCB Điều khiển công suất LED,1,1,1,FIFO,12000
+WIRE-COPPER,Dây Đồng,Nguyên Vật Liệu,Kg,Dây đồng dùng trong mạch,1,1,1,Moving Average,50000
+BOX-PAPER,Hộp Giấy,Vật Liệu Đóng Gói,Cái,Hộp giấy đóng gói đèn LED,1,1,1,FIFO,2000
+LAMP-5W-30LED,Đèn LED 5W (30 LED),Bóng Đèn LED,Cái,Đèn LED 5W hoàn chỉnh,1,0,1,FIFO,80000
+LAMP-10W-50LED,Đèn LED 10W (50 LED),Bóng Đèn LED,Cái,Đèn LED 10W hoàn chỉnh,1,0,1,FIFO,140000
+SPOTLIGHT-30W,Đèn Chiếu Sáng 30W,Đèn Chiếu Sáng,Cái,Đèn chiếu sáng công suất 30W,1,0,1,FIFO,250000

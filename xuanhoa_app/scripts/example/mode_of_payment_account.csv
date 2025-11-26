@@ -1,0 +1,5 @@
+parent,parenttype,parentfield,company,default_account
+Tiền mặt,Mode of Payment,accounts,XUÂN HÒA THÁI BÌNH,Cash - XHTB
+Chuyển khoản ngân hàng,Mode of Payment,accounts,XUÂN HÒA THÁI BÌNH,Vietcombank - XHTB
+Thẻ tín dụng,Mode of Payment,accounts,XUÂN HÒA THÁI BÌNH,Vietcombank - XHTB
+Ví điện tử,Mode of Payment,accounts,XUÂN HÒA THÁI BÌNH,Cash - XHTB

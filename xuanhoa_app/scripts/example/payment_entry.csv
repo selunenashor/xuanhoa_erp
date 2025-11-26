@@ -1,0 +1,4 @@
+name,naming_series,payment_type,posting_date,company,mode_of_payment,party_type,party,paid_from,paid_to,paid_amount,received_amount,reference_no,reference_date
+PE-001,ACC-PAY-.YYYY.-,Pay,2024-01-15,XUÂN HÒA THÁI BÌNH,Chuyển khoản ngân hàng,Supplier,NCC Linh Kiện Hà Nội,Vietcombank - XHTB,Accounts Payable - XHTB,1700000,1700000,CK-001,2024-01-15
+PE-002,ACC-PAY-.YYYY.-,Receive,2024-01-25,XUÂN HÒA THÁI BÌNH,Chuyển khoản ngân hàng,Customer,Đại Lí Bắc Kỳ,Accounts Receivable - XHTB,Vietcombank - XHTB,3700000,3700000,CK-KH-001,2024-01-25
+PE-003,ACC-PAY-.YYYY.-,Receive,2024-01-26,XUÂN HÒA THÁI BÌNH,Tiền mặt,Customer,Cửa Hàng Điện Tử ABC,Accounts Receivable - XHTB,Cash - XHTB,200000,200000,,2024-01-26

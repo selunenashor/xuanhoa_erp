@@ -1,0 +1,4 @@
+Warehouse Name,Company,Parent Warehouse,Is Group
+Kho Chính - XHTB,XUÂN HÒA THÁI BÌNH,,0
+Kho WIP - XHTB,XUÂN HÒA THÁI BÌNH,Kho Chính - XHTB,0
+Kho Thành Phẩm - XHTB,XUÂN HÒA THÁI BÌNH,Kho Chính - XHTB,0

@@ -1,0 +1,4 @@
+parent,parenttype,parentfield,reference_doctype,reference_name,total_amount,outstanding_amount,allocated_amount
+PE-001,Payment Entry,references,Purchase Invoice,PINV-001,1700000,1700000,1700000
+PE-002,Payment Entry,references,Sales Invoice,SINV-001,3700000,3700000,3700000
+PE-003,Payment Entry,references,Sales Invoice,SINV-003,400000,400000,200000
