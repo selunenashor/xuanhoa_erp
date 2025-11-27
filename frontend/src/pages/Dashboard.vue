@@ -76,13 +76,17 @@
       <!-- Activities list -->
       <div v-else class="space-y-4">
         <div v-for="activity in recentActivities" :key="activity.id"
-             class="flex items-start gap-4 p-3 rounded-lg hover:bg-gray-50 transition-colors">
+             @click="goToActivityDetail(activity)"
+             :class="[
+               'flex items-start gap-4 p-3 rounded-lg transition-colors',
+               activity.doctype === 'Stock Entry' ? 'cursor-pointer hover:bg-gray-100' : 'hover:bg-gray-50'
+             ]">
           <div :class="['w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0', getActivityBgColor(activity.type)]">
             <component :is="getActivityIcon(activity.type)" :class="['w-5 h-5', getActivityIconColor(activity.type)]" />
           </div>
           <div class="flex-1 min-w-0">
             <p class="text-sm text-gray-800 font-medium">{{ activity.title }}</p>
-            <p class="text-xs text-gray-500 mt-0.5">{{ activity.description }}</p>
+            <p class="text-xs text-gray-500 mt-0.5">{{ translateUOMInText(activity.description) }}</p>
             <div class="flex items-center gap-2 mt-1">
               <div class="w-5 h-5 rounded-full bg-gray-200 flex items-center justify-center">
                 <span class="text-[10px] font-medium text-gray-600">{{ activity.userInitial }}</span>
@@ -100,10 +104,61 @@
 
 <script setup>
 import { h, ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { dashboardAPI } from '@/api'
 
+const router = useRouter()
 const userStore = useUserStore()
+
+// UOM Translation Map
+const UOM_TRANSLATIONS = {
+  'Nos': 'Cái',
+  'nos': 'Cái',
+  'Unit': 'Cái',
+  'unit': 'Cái',
+  'Kg': 'Kg',
+  'kg': 'Kg',
+  'Kilogram': 'Kg',
+  'Meter': 'Mét',
+  'meter': 'Mét',
+  'm': 'Mét',
+  'Piece': 'Cái',
+  'piece': 'Cái',
+  'Pcs': 'Cái',
+  'pcs': 'Cái',
+  'Set': 'Bộ',
+  'set': 'Bộ',
+  'Box': 'Hộp',
+  'box': 'Hộp',
+  'Pack': 'Gói',
+  'pack': 'Gói',
+  'Roll': 'Cuộn',
+  'roll': 'Cuộn',
+  'Liter': 'Lít',
+  'liter': 'Lít',
+  'L': 'Lít',
+  'l': 'Lít',
+}
+
+// Translate UOM in text
+const translateUOMInText = (text) => {
+  if (!text) return text
+  let result = text
+  for (const [eng, viet] of Object.entries(UOM_TRANSLATIONS)) {
+    // Replace whole word only (e.g., "10 Nos" -> "10 Cái")
+    const regex = new RegExp(`\\b${eng}\\b`, 'g')
+    result = result.replace(regex, viet)
+  }
+  return result
+}
+
+// Navigate to activity detail
+const goToActivityDetail = (activity) => {
+  if (activity.doctype === 'Stock Entry' && activity.docname) {
+    router.push(`/stock/entries/${activity.docname}`)
+  }
+}
 
 // State
 const loadingActivities = ref(false)

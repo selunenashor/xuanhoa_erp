@@ -133,9 +133,16 @@ export const stockAPI = {
 
   /**
    * Search items with query
+   * @param {string} query - Search query
+   * @param {string|null} itemGroup - Filter by item group
+   * @param {string|null} warehouse - Warehouse to get specific stock
    */
-  searchItems: async (query, itemGroup = null) => {
-    const res = await api.post('/method/xuanhoa_app.api.search_items', { query, item_group: itemGroup })
+  searchItems: async (query, itemGroup = null, warehouse = null) => {
+    const res = await api.post('/method/xuanhoa_app.api.search_items', { 
+      query, 
+      item_group: itemGroup,
+      warehouse: warehouse 
+    })
     return res.data.message
   },
 
@@ -182,7 +189,20 @@ export const stockAPI = {
   },
 
   /**
-   * Create material issue (xuất kho)
+   * Create material issue (xuất kho) - Hỗ trợ nhiều sản phẩm
+   * @param {Object} data - { items: Array, posting_date: string, remarks: string }
+   */
+  createMaterialIssue: async (data) => {
+    const res = await api.post('/method/xuanhoa_app.api.create_material_issue', {
+      items: JSON.stringify(data.items),
+      posting_date: data.posting_date,
+      remarks: data.remarks
+    })
+    return res.data.message
+  },
+
+  /**
+   * Create material issue (legacy - single item)
    */
   createIssue: async (itemCode, qty, warehouse) => {
     const res = await api.post('/method/xuanhoa_app.api.create_material_issue', {

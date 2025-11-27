@@ -284,28 +284,85 @@ def get_stock_entry_detail(name):
 
 
 @frappe.whitelist()
-def create_material_issue(item_code, qty, warehouse, cost_center=None):
+def create_material_issue(items=None, posting_date=None, remarks=None, item_code=None, qty=None, warehouse=None, cost_center=None):
     """
-    Tạo phiếu xuất kho
+    Tạo phiếu xuất kho - Hỗ trợ 1 hoặc nhiều sản phẩm
     
     Args:
-        item_code: Mã hàng hóa
+        items: Danh sách sản phẩm (JSON array)
+            [{"item_code": "NVL-001", "qty": 100, "s_warehouse": "Kho Chính"}]
+        posting_date: Ngày xuất (YYYY-MM-DD)
+        remarks: Ghi chú
+        cost_center: Trung tâm chi phí (tùy chọn)
+        
+        # Legacy params (tương thích ngược)
+        item_code: Mã hàng hóa (nếu xuất 1 sản phẩm)
         qty: Số lượng xuất
         warehouse: Kho xuất (source warehouse)
-        cost_center: Trung tâm chi phí (tùy chọn)
+    
+    Returns:
+        dict: {success: bool, name: str, message: str}
+    
+    Example (Multi-item):
+        POST /api/method/xuanhoa_app.api.create_material_issue
+        {
+            "items": [
+                {"item_code": "NVL-001", "qty": 100, "s_warehouse": "Kho Chính - XHTB"},
+                {"item_code": "NVL-002", "qty": 50, "s_warehouse": "Kho Chính - XHTB"}
+            ],
+            "posting_date": "2025-01-15",
+            "remarks": "Xuất kho cho sản xuất"
+        }
+    
+    Example (Single item - Legacy):
+        POST /api/method/xuanhoa_app.api.create_material_issue
+        {
+            "item_code": "NVL-001",
+            "qty": 100,
+            "warehouse": "Kho Chính - XHTB"
+        }
     """
+    import json
+    
     try:
         doc = frappe.new_doc("Stock Entry")
         doc.purpose = "Material Issue"
         doc.stock_entry_type = "Material Issue"
         doc.company = frappe.defaults.get_user_default("Company") or "XUÂN HÒA THÁI BÌNH"
         
-        row = doc.append("items", {})
-        row.item_code = item_code
-        row.qty = float(qty)
-        row.s_warehouse = warehouse
-        if cost_center:
-            row.cost_center = cost_center
+        if posting_date:
+            doc.posting_date = posting_date
+        
+        if remarks:
+            doc.remarks = remarks
+        
+        # Parse items if it's a JSON string
+        if items and isinstance(items, str):
+            items = json.loads(items)
+        
+        # Multi-item mode
+        if items and isinstance(items, list) and len(items) > 0:
+            for item_data in items:
+                row = doc.append("items", {})
+                row.item_code = item_data.get("item_code")
+                row.qty = float(item_data.get("qty", 0))
+                row.s_warehouse = item_data.get("s_warehouse")
+                if cost_center:
+                    row.cost_center = cost_center
+        
+        # Legacy single-item mode
+        elif item_code and qty and warehouse:
+            row = doc.append("items", {})
+            row.item_code = item_code
+            row.qty = float(qty)
+            row.s_warehouse = warehouse
+            if cost_center:
+                row.cost_center = cost_center
+        else:
+            return {
+                "success": False,
+                "message": _("Vui lòng cung cấp danh sách sản phẩm")
+            }
         
         doc.insert()
         doc.submit()
@@ -671,17 +728,20 @@ def get_time_ago(dt):
 # ============================================
 
 @frappe.whitelist()
-def search_items(query, item_group=None, limit=10):
+def search_items(query, item_group=None, warehouse=None, limit=10):
     """
     Tìm kiếm Item cho autocomplete
     
     Args:
         query: Từ khóa tìm kiếm
         item_group: Lọc theo nhóm hàng (tùy chọn)
+        warehouse: Kho cụ thể để lấy tồn kho (tùy chọn)
         limit: Số kết quả tối đa
     
     Returns:
         list: Danh sách items với giá và số lượng tồn kho
+            - actual_qty: Tổng tồn kho tất cả kho
+            - warehouse_qty: Tồn kho của kho được chọn (nếu có)
     """
     filters = {"is_stock_item": 1, "disabled": 0}
     if item_group:
@@ -716,6 +776,24 @@ def search_items(query, item_group=None, limit=10):
         else:
             item["actual_qty"] = 0
         
+        # Nếu có warehouse, lấy thêm tồn kho của kho đó
+        if warehouse:
+            wh_bin = frappe.db.sql("""
+                SELECT actual_qty, valuation_rate
+                FROM `tabBin` 
+                WHERE item_code = %s AND warehouse = %s
+            """, (item.item_code, warehouse), as_dict=True)
+            
+            if wh_bin and wh_bin[0]:
+                item["warehouse_qty"] = wh_bin[0].get("actual_qty") or 0
+                # Cập nhật valuation_rate từ kho được chọn
+                if wh_bin[0].get("valuation_rate"):
+                    item["valuation_rate"] = wh_bin[0].get("valuation_rate")
+            else:
+                item["warehouse_qty"] = 0
+        else:
+            item["warehouse_qty"] = None  # Chưa chọn kho
+        
         # Đảm bảo có rate để frontend sử dụng
         item["rate"] = item.get("valuation_rate") or item.get("standard_rate") or 0
     
@@ -730,25 +808,52 @@ def get_item_stock(item_code, warehouse=None):
     Args:
         item_code: Mã hàng hóa
         warehouse: Kho cụ thể (tùy chọn, nếu không sẽ lấy tất cả kho)
-    """
-    filters = {"item_code": item_code}
-    if warehouse:
-        filters["warehouse"] = warehouse
     
-    bins = frappe.get_all(
+    Returns:
+        dict: {item_code, total_qty, total_value, by_warehouse: [...]}
+    """
+    # Always get all warehouses first for accurate totals
+    all_bins = frappe.get_all(
         "Bin",
-        filters=filters,
-        fields=["warehouse", "actual_qty", "reserved_qty", "ordered_qty", "stock_value"]
+        filters={"item_code": item_code},
+        fields=["warehouse", "actual_qty", "reserved_qty", "ordered_qty", "stock_value", "valuation_rate"]
     )
     
-    total_qty = sum(b.actual_qty for b in bins)
-    total_value = sum(b.stock_value for b in bins)
+    total_qty = sum(b.actual_qty or 0 for b in all_bins)
+    total_value = sum(b.stock_value or 0 for b in all_bins)
+    
+    # Calculate average valuation rate
+    avg_valuation_rate = 0
+    if total_qty > 0:
+        avg_valuation_rate = total_value / total_qty
+    
+    # If specific warehouse requested, filter the results
+    if warehouse:
+        filtered_bins = [b for b in all_bins if b.warehouse == warehouse]
+        warehouse_qty = sum(b.actual_qty or 0 for b in filtered_bins)
+        warehouse_value = sum(b.stock_value or 0 for b in filtered_bins)
+        warehouse_rate = 0
+        if filtered_bins and filtered_bins[0].valuation_rate:
+            warehouse_rate = filtered_bins[0].valuation_rate
+        elif warehouse_qty > 0:
+            warehouse_rate = warehouse_value / warehouse_qty
+        
+        return {
+            "item_code": item_code,
+            "total_qty": total_qty,  # Total across all warehouses
+            "total_value": total_value,
+            "warehouse_qty": warehouse_qty,  # Specific warehouse qty
+            "warehouse_value": warehouse_value,
+            "valuation_rate": warehouse_rate or avg_valuation_rate,
+            "by_warehouse": all_bins  # Return all for reference
+        }
     
     return {
         "item_code": item_code,
         "total_qty": total_qty,
         "total_value": total_value,
-        "by_warehouse": bins
+        "valuation_rate": avg_valuation_rate,
+        "by_warehouse": all_bins
     }
 
 
@@ -757,9 +862,16 @@ def get_item_stock(item_code, warehouse=None):
 # ============================================
 
 @frappe.whitelist()
-def get_warehouses(is_group=None):
+def get_warehouses(is_group=None, company=None):
     """
     Lấy danh sách kho (chỉ lấy kho không bị disabled và không phải group)
+    
+    Args:
+        is_group: Lọc theo loại kho (0 = kho thực, 1 = kho nhóm)
+        company: Lọc theo công ty (nếu không truyền, lấy theo default company của user)
+    
+    Returns:
+        list: Danh sách warehouse với thông tin cơ bản
     """
     filters = {"disabled": 0}
     if is_group is not None:
@@ -768,10 +880,18 @@ def get_warehouses(is_group=None):
         # Mặc định chỉ lấy kho leaf (không phải group)
         filters["is_group"] = 0
     
+    # Lọc theo company - QUAN TRỌNG để tránh lỗi warehouse không khớp company
+    if company:
+        filters["company"] = company
+    else:
+        default_company = frappe.defaults.get_user_default("Company")
+        if default_company:
+            filters["company"] = default_company
+    
     return frappe.get_all(
         "Warehouse",
         filters=filters,
-        fields=["name", "warehouse_name", "parent_warehouse", "is_group", "warehouse_type"],
+        fields=["name", "warehouse_name", "parent_warehouse", "is_group", "warehouse_type", "company"],
         order_by="warehouse_name"
     )
 

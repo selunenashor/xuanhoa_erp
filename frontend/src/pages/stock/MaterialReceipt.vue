@@ -186,9 +186,10 @@
                       <input
                         type="number"
                         v-model.number="item.qty"
-                        min="0.01"
-                        step="0.01"
+                        min="1"
+                        step="1"
                         required
+                        @change="item.qty = Math.max(1, Math.floor(item.qty))"
                         class="w-full px-3 py-2 pr-16 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
                         placeholder="0"
                       />
