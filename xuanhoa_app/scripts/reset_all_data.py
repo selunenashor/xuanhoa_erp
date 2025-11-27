@@ -1033,3 +1033,100 @@ def run_import_only():
 def run_verify():
     """Just verify current setup"""
     verify_setup()
+
+
+def setup_all():
+    """
+    🚀 SETUP TOÀN BỘ HỆ THỐNG - CHẠY 1 LẦN DUY NHẤT
+    ================================================
+    
+    Script này thực hiện:
+    1. Reset toàn bộ dữ liệu (xóa và tạo lại)
+    2. Import thêm Customers, Item Prices, Territories
+    3. Setup Bank Accounts và Mode of Payment
+    4. Thiết lập Role Permissions
+    5. Tạo đủ 6 users cho các phòng ban
+    
+    Chạy: bench --site erpnext.localhost execute xuanhoa_app.scripts.reset_all_data.setup_all
+    
+    ⚠️ YÊU CẦU: Phải chạy `bench start` ở terminal khác trước!
+    """
+    print("\n" + "="*70)
+    print("🚀 SETUP TOÀN BỘ HỆ THỐNG XUÂN HÒA ERP")
+    print("="*70)
+    print("Script này sẽ:")
+    print("  1. Reset toàn bộ dữ liệu")
+    print("  2. Import Customers, Item Prices, Territories")
+    print("  3. Setup Bank Accounts và Mode of Payment")
+    print("  4. Thiết lập Role Permissions")
+    print("  5. Tạo 6 users (admin, kho, sanxuat, muahang, banhang, ketoan)")
+    print("="*70 + "\n")
+    
+    # Step 1: Reset data (from reset_all_data.py)
+    run()
+    
+    # Step 2: Import additional data (from import_data.py)
+    print("\n" + "="*70)
+    print("📥 IMPORT DỮ LIỆU BỔ SUNG")
+    print("="*70)
+    
+    from xuanhoa_app.scripts import import_data
+    
+    # Setup permissions
+    import_data.setup_role_permissions()
+    
+    # Setup additional users
+    import_data.setup_users()
+    
+    # Import customer groups and territories
+    import_data.import_customer_groups()
+    import_data.import_territories()
+    
+    # Import customers
+    import_data.import_customers()
+    
+    # Import item prices
+    import_data.import_item_prices()
+    
+    # Setup accounting
+    import_data.setup_accounts()
+    import_data.setup_mode_of_payment_accounts()
+    
+    frappe.db.commit()
+    frappe.clear_cache()
+    
+    print("\n" + "="*70)
+    print("🎉 HOÀN TẤT SETUP TOÀN BỘ HỆ THỐNG!")
+    print("="*70)
+    print(f"""
+📋 THÔNG TIN HỆ THỐNG:
+
+Company: {COMPANY_NAME} ({COMPANY_ABBR})
+
+👥 USERS (6 users):
+  ┌──────────────────────────────┬──────────────┬────────────────────────────────────┐
+  │ Email                        │ Password     │ Roles                              │
+  ├──────────────────────────────┼──────────────┼────────────────────────────────────┤
+  │ admin@xuanhoa.local          │ admin123     │ System Manager + All               │
+  │ kho@xuanhoa.local            │ kho123       │ Stock Manager/User                 │
+  │ sanxuat@xuanhoa.local        │ sanxuat123   │ Manufacturing Manager/User         │
+  │ muahang@xuanhoa.local        │ muahang123   │ Purchase Manager/User + Stock User │
+  │ banhang@xuanhoa.local        │ banhang123   │ Sales Manager/User + Stock User    │
+  │ ketoan@xuanhoa.local         │ ketoan123    │ Accounts Manager/User              │
+  └──────────────────────────────┴──────────────┴────────────────────────────────────┘
+
+📦 WAREHOUSES:
+  - Kho Chính - {COMPANY_ABBR} (Nguyên vật liệu)
+  - Kho Thành Phẩm - {COMPANY_ABBR} (Thành phẩm)  
+  - Kho WIP - {COMPANY_ABBR} (Work In Progress)
+
+🏢 SUPPLIERS: 4 nhà cung cấp
+👤 CUSTOMERS: 5 khách hàng
+📦 ITEMS: 10 sản phẩm (7 NVL + 3 thành phẩm)
+💰 ITEM PRICES: Giá mua + giá bán
+🏦 BANK ACCOUNTS: Ngân hàng Nội địa, Ngân hàng Quốc tế
+💳 MODE OF PAYMENT: Cash, Wire Transfer, Cheque, Credit Card, Bank Draft
+
+✅ Hệ thống đã sẵn sàng sử dụng!
+⚠️ Hãy đăng nhập lại để refresh session.
+""")

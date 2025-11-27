@@ -84,6 +84,44 @@ const routes = [
         name: 'WorkOrderDetail',
         component: () => import('@/pages/production/WorkOrderDetail.vue'),
         meta: { title: 'Chi tiết lệnh sản xuất' }
+      },
+      // Purchase Invoice routes
+      {
+        path: 'purchasing/invoices',
+        name: 'PurchaseInvoiceList',
+        component: () => import('@/pages/purchasing/PurchaseInvoiceList.vue'),
+        meta: { title: 'Hóa đơn mua hàng' }
+      },
+      {
+        path: 'purchasing/invoices/create',
+        name: 'PurchaseInvoiceCreate',
+        component: () => import('@/pages/purchasing/PurchaseInvoiceCreate.vue'),
+        meta: { title: 'Tạo hóa đơn mua hàng' }
+      },
+      {
+        path: 'purchasing/invoices/:name',
+        name: 'PurchaseInvoiceDetail',
+        component: () => import('@/pages/purchasing/PurchaseInvoiceDetail.vue'),
+        meta: { title: 'Chi tiết hóa đơn mua hàng' }
+      },
+      // Sales Invoice routes
+      {
+        path: 'selling/invoices',
+        name: 'SalesInvoiceList',
+        component: () => import('@/pages/selling/SalesInvoiceList.vue'),
+        meta: { title: 'Hóa đơn bán hàng' }
+      },
+      {
+        path: 'selling/invoices/create',
+        name: 'SalesInvoiceCreate',
+        component: () => import('@/pages/selling/SalesInvoiceCreate.vue'),
+        meta: { title: 'Tạo hóa đơn bán hàng' }
+      },
+      {
+        path: 'selling/invoices/:name',
+        name: 'SalesInvoiceDetail',
+        component: () => import('@/pages/selling/SalesInvoiceDetail.vue'),
+        meta: { title: 'Chi tiết hóa đơn bán hàng' }
       }
     ]
   },

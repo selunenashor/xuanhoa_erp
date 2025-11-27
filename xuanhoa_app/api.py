@@ -1294,6 +1294,7 @@ def search_items(query, item_group=None, warehouse=None, limit=10):
         list: Danh sách items với giá và số lượng tồn kho
             - actual_qty: Tổng tồn kho tất cả kho
             - warehouse_qty: Tồn kho của kho được chọn (nếu có)
+            - standard_selling_rate: Giá bán tiêu chuẩn
     """
     filters = {"is_stock_item": 1, "disabled": 0}
     if item_group:
@@ -1310,7 +1311,7 @@ def search_items(query, item_group=None, warehouse=None, limit=10):
         limit=int(limit)
     )
     
-    # Thêm thông tin tồn kho từ Bin
+    # Thêm thông tin tồn kho từ Bin và giá bán từ Item Price
     for item in items:
         # Lấy tổng tồn kho từ tất cả kho
         bin_data = frappe.db.sql("""
@@ -1345,6 +1346,24 @@ def search_items(query, item_group=None, warehouse=None, limit=10):
                 item["warehouse_qty"] = 0
         else:
             item["warehouse_qty"] = None  # Chưa chọn kho
+        
+        # Lấy giá bán tiêu chuẩn từ Item Price (Selling)
+        selling_price = frappe.db.sql("""
+            SELECT price_list_rate 
+            FROM `tabItem Price` 
+            WHERE item_code = %s 
+              AND selling = 1 
+              AND (valid_from IS NULL OR valid_from <= CURDATE())
+              AND (valid_upto IS NULL OR valid_upto >= CURDATE())
+            ORDER BY valid_from DESC
+            LIMIT 1
+        """, item.item_code, as_dict=True)
+        
+        if selling_price and selling_price[0]:
+            item["standard_selling_rate"] = selling_price[0].get("price_list_rate") or 0
+        else:
+            # Fallback: dùng standard_rate hoặc valuation_rate
+            item["standard_selling_rate"] = item.get("standard_rate") or item.get("valuation_rate") or 0
         
         # Đảm bảo có rate để frontend sử dụng
         item["rate"] = item.get("valuation_rate") or item.get("standard_rate") or 0
@@ -1487,3 +1506,1243 @@ def get_items():
         order_by="item_name",
         limit=100
     )
+
+
+# ============================================
+# SUPPLIER APIs
+# ============================================
+
+@frappe.whitelist()
+def get_suppliers(query=None, limit=20):
+    """
+    Lấy danh sách nhà cung cấp
+    
+    Args:
+        query: Từ khóa tìm kiếm (tên hoặc mã NCC)
+        limit: Số lượng kết quả tối đa
+    
+    Returns:
+        list: Danh sách suppliers
+    """
+    filters = {"disabled": 0}
+    or_filters = {}
+    
+    if query:
+        or_filters = {
+            "name": ["like", f"%{query}%"],
+            "supplier_name": ["like", f"%{query}%"]
+        }
+    
+    suppliers = frappe.get_all(
+        "Supplier",
+        filters=filters,
+        or_filters=or_filters if query else None,
+        fields=["name", "supplier_name", "supplier_group", "country", "default_currency"],
+        order_by="supplier_name",
+        limit=int(limit)
+    )
+    
+    return suppliers
+
+
+# ============================================
+# CUSTOMER APIs
+# ============================================
+
+@frappe.whitelist()
+def get_customers(query=None, limit=20):
+    """
+    Lấy danh sách khách hàng
+    
+    Args:
+        query: Từ khóa tìm kiếm (tên hoặc mã KH)
+        limit: Số lượng kết quả tối đa
+    
+    Returns:
+        list: Danh sách customers
+    """
+    filters = {"disabled": 0}
+    or_filters = {}
+    
+    if query:
+        or_filters = {
+            "name": ["like", f"%{query}%"],
+            "customer_name": ["like", f"%{query}%"]
+        }
+    
+    customers = frappe.get_all(
+        "Customer",
+        filters=filters,
+        or_filters=or_filters if query else None,
+        fields=["name", "customer_name", "customer_group", "territory", "default_currency"],
+        order_by="customer_name",
+        limit=int(limit)
+    )
+    
+    return customers
+
+
+# ============================================
+# PURCHASE INVOICE APIs
+# ============================================
+
+@frappe.whitelist()
+def get_purchase_invoices(status=None, supplier=None, from_date=None, to_date=None, 
+                          search=None, limit=20, page=1):
+    """
+    Lấy danh sách hóa đơn mua hàng
+    
+    Args:
+        status: Lọc theo trạng thái (Draft, Unpaid, Paid, Overdue, Cancelled)
+        supplier: Lọc theo nhà cung cấp
+        from_date: Ngày bắt đầu
+        to_date: Ngày kết thúc
+        search: Tìm kiếm theo mã hóa đơn
+        limit: Số bản ghi mỗi trang
+        page: Số trang
+    
+    Returns:
+        dict: {data: list, total: int, page: int, total_pages: int}
+    """
+    filters = {}
+    
+    # Lọc theo status
+    if status:
+        if status == "Draft":
+            filters["docstatus"] = 0
+        elif status == "Cancelled":
+            filters["docstatus"] = 2
+        elif status == "Unpaid":
+            filters["docstatus"] = 1
+            filters["outstanding_amount"] = [">", 0]
+        elif status == "Paid":
+            filters["docstatus"] = 1
+            filters["outstanding_amount"] = 0
+        elif status == "Overdue":
+            filters["docstatus"] = 1
+            filters["outstanding_amount"] = [">", 0]
+            filters["due_date"] = ["<", frappe.utils.today()]
+    
+    if supplier:
+        filters["supplier"] = supplier
+    
+    if from_date:
+        filters["posting_date"] = [">=", from_date]
+    if to_date:
+        if "posting_date" in filters:
+            filters["posting_date"] = ["between", [from_date, to_date]]
+        else:
+            filters["posting_date"] = ["<=", to_date]
+    
+    if search:
+        filters["name"] = ["like", f"%{search}%"]
+    
+    # Pagination
+    limit = int(limit)
+    page = int(page)
+    offset = (page - 1) * limit
+    
+    # Count total
+    total_count = frappe.db.count("Purchase Invoice", filters=filters)
+    
+    invoices = frappe.get_all(
+        "Purchase Invoice",
+        filters=filters,
+        fields=[
+            "name", "supplier", "supplier_name", "posting_date", "due_date",
+            "grand_total", "outstanding_amount", "currency", "docstatus",
+            "is_paid", "status", "creation", "owner"
+        ],
+        order_by="creation desc",
+        limit_start=offset,
+        limit_page_length=limit
+    )
+    
+    # Enhance data
+    for inv in invoices:
+        # Lấy số lượng items
+        inv["item_count"] = frappe.db.count("Purchase Invoice Item", {"parent": inv.name})
+        
+        # Lấy tên người tạo
+        inv["owner_name"] = frappe.db.get_value("User", inv.owner, "full_name") or inv.owner
+        
+        # Status display
+        if inv.docstatus == 0:
+            inv["status_display"] = "Chờ duyệt"
+            inv["status_color"] = "warning"
+        elif inv.docstatus == 2:
+            inv["status_display"] = "Đã hủy"
+            inv["status_color"] = "gray"
+        elif inv.outstanding_amount == 0:
+            inv["status_display"] = "Đã thanh toán"
+            inv["status_color"] = "success"
+        elif inv.due_date and str(inv.due_date) < frappe.utils.today():
+            inv["status_display"] = "Quá hạn"
+            inv["status_color"] = "error"
+        else:
+            inv["status_display"] = "Chưa thanh toán"
+            inv["status_color"] = "info"
+        
+        # Kiểm tra đã tạo Stock Entry chưa
+        inv["has_stock_entry"] = frappe.db.exists("Stock Entry", {
+            "purchase_invoice": inv.name,
+            "docstatus": ["!=", 2]
+        }) or False
+    
+    total_pages = (total_count + limit - 1) // limit if limit > 0 else 1
+    
+    return {
+        "data": invoices,
+        "total": total_count,
+        "page": page,
+        "page_size": limit,
+        "total_pages": total_pages
+    }
+
+
+@frappe.whitelist()
+def get_purchase_invoice_detail(name):
+    """
+    Lấy chi tiết hóa đơn mua hàng
+    
+    Args:
+        name: Mã hóa đơn
+    
+    Returns:
+        dict: Chi tiết hóa đơn
+    """
+    if not frappe.db.exists("Purchase Invoice", name):
+        return {"success": False, "message": _("Không tìm thấy hóa đơn {0}").format(name)}
+    
+    doc = frappe.get_doc("Purchase Invoice", name)
+    
+    # Lấy thông tin items
+    items = []
+    for item in doc.items:
+        items.append({
+            "item_code": item.item_code,
+            "item_name": item.item_name,
+            "qty": item.qty,
+            "uom": item.uom,
+            "rate": item.rate,
+            "amount": item.amount,
+            "warehouse": item.warehouse,
+            "received_qty": item.received_qty or 0,
+            "stock_qty": item.stock_qty or item.qty
+        })
+    
+    # Lấy tên người thực hiện
+    owner_name = frappe.db.get_value("User", doc.owner, "full_name") or doc.owner
+    
+    # Lấy Stock Entries liên quan (tìm qua remarks vì Stock Entry không có trường purchase_invoice)
+    # Khi tạo Stock Entry từ Purchase Invoice, ta sẽ lưu reference trong remarks
+    stock_entries = []
+    se_list = frappe.get_all(
+        "Stock Entry",
+        filters={
+            "docstatus": ["!=", 2],
+            "remarks": ["like", f"%{name}%"]
+        },
+        fields=["name", "purpose", "posting_date", "docstatus", "creation", "remarks"],
+        order_by="creation desc"
+    )
+    # Lọc chính xác để tránh trùng tên (vì LIKE có thể match PINV-001 với PINV-0010)
+    for se in se_list:
+        se_remarks = se.get("remarks") or ""
+        # Check exact match: name should be at word boundary or standalone
+        if name in se_remarks:
+            stock_entries.append(se)
+    
+    # Status display
+    if doc.docstatus == 0:
+        status_display = "Chờ duyệt"
+        status_color = "warning"
+    elif doc.docstatus == 2:
+        status_display = "Đã hủy"
+        status_color = "gray"
+    elif doc.outstanding_amount == 0:
+        status_display = "Đã thanh toán"
+        status_color = "success"
+    elif doc.due_date and str(doc.due_date) < frappe.utils.today():
+        status_display = "Quá hạn"
+        status_color = "error"
+    else:
+        status_display = "Chưa thanh toán"
+        status_color = "info"
+    
+    return {
+        "success": True,
+        "name": doc.name,
+        "supplier": doc.supplier,
+        "supplier_name": doc.supplier_name,
+        "posting_date": str(doc.posting_date),
+        "due_date": str(doc.due_date) if doc.due_date else None,
+        "grand_total": doc.grand_total,
+        "net_total": doc.net_total,
+        "total_taxes_and_charges": doc.total_taxes_and_charges,
+        "outstanding_amount": doc.outstanding_amount,
+        "currency": doc.currency,
+        "docstatus": doc.docstatus,
+        "status": doc.status,
+        "status_display": status_display,
+        "status_color": status_color,
+        "is_paid": doc.is_paid,
+        "remarks": doc.remarks,
+        "items": items,
+        "stock_entries": stock_entries,
+        "owner": doc.owner,
+        "owner_name": owner_name,
+        "creation": str(doc.creation),
+        "modified": str(doc.modified),
+        "set_warehouse": doc.set_warehouse,
+        "update_stock": doc.update_stock
+    }
+
+
+@frappe.whitelist()
+def create_purchase_invoice(supplier, items, posting_date=None, due_date=None, 
+                            set_warehouse=None, remarks=None, update_stock=0):
+    """
+    Tạo hóa đơn mua hàng mới (Draft)
+    
+    Args:
+        supplier: Mã nhà cung cấp
+        items: Danh sách sản phẩm (JSON array)
+            [{"item_code": "NVL-001", "qty": 100, "rate": 1000, "warehouse": "Kho Chính"}]
+        posting_date: Ngày hóa đơn
+        due_date: Ngày đến hạn thanh toán
+        set_warehouse: Kho mặc định cho tất cả items
+        remarks: Ghi chú
+        update_stock: Cập nhật tồn kho trực tiếp (0 = không, 1 = có)
+    
+    Returns:
+        dict: {success: bool, name: str, message: str}
+    """
+    import json
+    
+    try:
+        # Validate supplier
+        if not frappe.db.exists("Supplier", supplier):
+            return {"success": False, "message": _("Nhà cung cấp không tồn tại.")}
+        
+        # Parse items
+        if items and isinstance(items, str):
+            items = json.loads(items)
+        
+        if not items or len(items) == 0:
+            return {"success": False, "message": _("Vui lòng thêm ít nhất một sản phẩm.")}
+        
+        company = frappe.defaults.get_user_default("Company") or frappe.db.get_single_value("Global Defaults", "default_company")
+        
+        if not company:
+            return {"success": False, "message": _("Chưa thiết lập công ty mặc định.")}
+        
+        # Tạo Purchase Invoice
+        doc = frappe.new_doc("Purchase Invoice")
+        doc.supplier = supplier
+        doc.company = company
+        doc.update_stock = int(update_stock)
+        
+        if posting_date:
+            doc.posting_date = posting_date
+        
+        if due_date:
+            doc.due_date = due_date
+        
+        if set_warehouse:
+            doc.set_warehouse = set_warehouse
+        
+        if remarks:
+            doc.remarks = remarks
+        
+        # Add items
+        for item_data in items:
+            row = doc.append("items", {})
+            row.item_code = item_data.get("item_code")
+            row.qty = float(item_data.get("qty", 0))
+            row.rate = float(item_data.get("rate", 0))
+            if item_data.get("warehouse"):
+                row.warehouse = item_data.get("warehouse")
+            elif set_warehouse:
+                row.warehouse = set_warehouse
+        
+        doc.insert()
+        
+        return {
+            "success": True,
+            "name": doc.name,
+            "message": _("Đã tạo hóa đơn mua hàng {0}").format(doc.name)
+        }
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "create_purchase_invoice Error")
+        return {
+            "success": False,
+            "message": _parse_friendly_error(str(e))
+        }
+
+
+@frappe.whitelist()
+def submit_purchase_invoice(name):
+    """
+    Duyệt hóa đơn mua hàng
+    
+    Args:
+        name: Mã hóa đơn
+    
+    Returns:
+        dict: {success: bool, message: str}
+    """
+    try:
+        if not frappe.db.exists("Purchase Invoice", name):
+            return {"success": False, "message": _("Không tìm thấy hóa đơn.")}
+        
+        doc = frappe.get_doc("Purchase Invoice", name)
+        
+        if doc.docstatus == 1:
+            return {"success": False, "message": _("Hóa đơn đã được duyệt trước đó.")}
+        elif doc.docstatus == 2:
+            return {"success": False, "message": _("Hóa đơn đã bị hủy, không thể duyệt.")}
+        
+        doc.submit()
+        
+        return {
+            "success": True,
+            "message": _("Đã duyệt hóa đơn mua hàng {0}").format(name)
+        }
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "submit_purchase_invoice Error")
+        return {
+            "success": False,
+            "message": _parse_friendly_error(str(e))
+        }
+
+
+@frappe.whitelist()
+def cancel_purchase_invoice(name):
+    """
+    Hủy hóa đơn mua hàng
+    
+    Args:
+        name: Mã hóa đơn
+    
+    Returns:
+        dict: {success: bool, message: str}
+    """
+    try:
+        if not frappe.db.exists("Purchase Invoice", name):
+            return {"success": False, "message": _("Không tìm thấy hóa đơn.")}
+        
+        doc = frappe.get_doc("Purchase Invoice", name)
+        
+        if doc.docstatus == 0:
+            # Draft - just delete
+            doc.delete()
+            return {
+                "success": True,
+                "message": _("Đã xóa hóa đơn mua hàng.")
+            }
+        elif doc.docstatus == 2:
+            return {"success": False, "message": _("Hóa đơn đã bị hủy trước đó.")}
+        
+        # Check if has linked stock entries
+        stock_entries = frappe.get_all("Stock Entry", 
+            filters={"purchase_invoice": name, "docstatus": 1},
+            limit=1
+        )
+        if stock_entries:
+            return {
+                "success": False,
+                "message": _("Không thể hủy vì đã có phiếu nhập kho liên kết. Vui lòng hủy phiếu nhập kho trước.")
+            }
+        
+        doc.cancel()
+        
+        return {
+            "success": True,
+            "message": _("Đã hủy hóa đơn mua hàng {0}").format(name)
+        }
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "cancel_purchase_invoice Error")
+        return {
+            "success": False,
+            "message": _parse_friendly_error(str(e))
+        }
+
+
+@frappe.whitelist()
+def create_stock_entry_from_purchase_invoice(purchase_invoice, warehouse=None):
+    """
+    Tạo phiếu nhập kho từ hóa đơn mua hàng
+    
+    Args:
+        purchase_invoice: Mã hóa đơn mua hàng
+        warehouse: Kho nhập (nếu không truyền sẽ lấy từ Invoice)
+    
+    Returns:
+        dict: {success: bool, name: str, message: str}
+    """
+    try:
+        if not frappe.db.exists("Purchase Invoice", purchase_invoice):
+            return {"success": False, "message": _("Không tìm thấy hóa đơn mua hàng.")}
+        
+        pi = frappe.get_doc("Purchase Invoice", purchase_invoice)
+        
+        if pi.docstatus != 1:
+            return {"success": False, "message": _("Hóa đơn chưa được duyệt. Vui lòng duyệt hóa đơn trước.")}
+        
+        if pi.update_stock:
+            return {"success": False, "message": _("Hóa đơn này đã cập nhật tồn kho trực tiếp, không cần tạo phiếu nhập kho.")}
+        
+        # Check if already has stock entry (tìm trong remarks)
+        existing = frappe.get_all("Stock Entry", 
+            filters={"docstatus": ["!=", 2], "remarks": ["like", f"%{purchase_invoice}%"]},
+            limit=1
+        )
+        if existing:
+            return {"success": False, "message": _("Đã có phiếu nhập kho cho hóa đơn này: {0}").format(existing[0].name)}
+        
+        # Create Stock Entry
+        doc = frappe.new_doc("Stock Entry")
+        doc.purpose = "Material Receipt"
+        doc.stock_entry_type = "Material Receipt"
+        doc.company = pi.company
+        # Lưu reference trong remarks vì Stock Entry không có field purchase_invoice
+        doc.remarks = _("Nhập kho từ hóa đơn mua hàng: {0}").format(purchase_invoice)
+        
+        target_warehouse = warehouse or pi.set_warehouse
+        
+        for item in pi.items:
+            row = doc.append("items", {})
+            row.item_code = item.item_code
+            row.qty = item.qty
+            row.t_warehouse = item.warehouse or target_warehouse
+            row.basic_rate = item.rate
+        
+        doc.insert()
+        doc.submit()
+        
+        return {
+            "success": True,
+            "name": doc.name,
+            "message": _("Đã tạo phiếu nhập kho {0}").format(doc.name)
+        }
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "create_stock_entry_from_purchase_invoice Error")
+        return {
+            "success": False,
+            "message": _parse_friendly_error(str(e))
+        }
+
+
+@frappe.whitelist()
+def create_payment_for_purchase_invoice(purchase_invoice, amount=None, mode_of_payment=None, 
+                                        reference_no=None, reference_date=None):
+    """
+    Tạo thanh toán cho hóa đơn mua hàng
+    
+    Args:
+        purchase_invoice: Mã hóa đơn mua hàng
+        amount: Số tiền thanh toán (nếu không truyền sẽ thanh toán toàn bộ)
+        mode_of_payment: Hình thức thanh toán (Cash, Bank Transfer, etc.)
+        reference_no: Số tham chiếu (số chứng từ ngân hàng, etc.)
+        reference_date: Ngày tham chiếu
+    
+    Returns:
+        dict: {success: bool, name: str, message: str}
+    """
+    try:
+        if not frappe.db.exists("Purchase Invoice", purchase_invoice):
+            return {"success": False, "message": _("Không tìm thấy hóa đơn mua hàng.")}
+        
+        pi = frappe.get_doc("Purchase Invoice", purchase_invoice)
+        
+        if pi.docstatus != 1:
+            return {"success": False, "message": _("Hóa đơn chưa được duyệt. Vui lòng duyệt hóa đơn trước.")}
+        
+        if pi.outstanding_amount <= 0:
+            return {"success": False, "message": _("Hóa đơn đã được thanh toán đầy đủ.")}
+        
+        # Determine payment amount
+        payment_amount = float(amount) if amount else pi.outstanding_amount
+        
+        if payment_amount > pi.outstanding_amount:
+            return {"success": False, "message": _("Số tiền thanh toán ({0}) vượt quá số tiền còn nợ ({1}).").format(
+                payment_amount, pi.outstanding_amount
+            )}
+        
+        if payment_amount <= 0:
+            return {"success": False, "message": _("Số tiền thanh toán phải lớn hơn 0.")}
+        
+        # Get default accounts
+        company = pi.company
+        default_mode = mode_of_payment or "Cash"
+        
+        # Get payment account (Cash/Bank) from Mode of Payment
+        mode_of_payment_doc = frappe.get_doc("Mode of Payment", default_mode) if frappe.db.exists("Mode of Payment", default_mode) else None
+        
+        paid_from_account = None
+        if mode_of_payment_doc:
+            for acc in mode_of_payment_doc.accounts:
+                if acc.company == company:
+                    paid_from_account = acc.default_account
+                    break
+        
+        if not paid_from_account:
+            # Fallback to default cash/bank account
+            paid_from_account = frappe.db.get_value("Company", company, "default_cash_account") or \
+                                frappe.db.get_value("Company", company, "default_bank_account")
+        
+        if not paid_from_account:
+            return {"success": False, "message": _("Chưa thiết lập tài khoản tiền mặt/ngân hàng mặc định cho công ty hoặc hình thức thanh toán.")}
+        
+        # Create Payment Entry
+        # For "Pay" type: paid_from = Cash/Bank (source), paid_to = Creditors (destination)
+        pe = frappe.new_doc("Payment Entry")
+        pe.payment_type = "Pay"
+        pe.posting_date = frappe.utils.today()
+        pe.company = company
+        pe.mode_of_payment = default_mode
+        pe.party_type = "Supplier"
+        pe.party = pi.supplier
+        pe.party_name = pi.supplier_name
+        pe.paid_from = paid_from_account  # Cash/Bank account (source of money)
+        pe.paid_to = pi.credit_to  # Creditors/Payable account from invoice
+        pe.paid_amount = payment_amount
+        pe.received_amount = payment_amount
+        pe.source_exchange_rate = 1
+        pe.target_exchange_rate = 1
+        
+        if reference_no:
+            pe.reference_no = reference_no
+        if reference_date:
+            pe.reference_date = reference_date
+        
+        # Add reference to the invoice
+        pe.append("references", {
+            "reference_doctype": "Purchase Invoice",
+            "reference_name": purchase_invoice,
+            "total_amount": pi.grand_total,
+            "outstanding_amount": pi.outstanding_amount,
+            "allocated_amount": payment_amount
+        })
+        
+        pe.insert()
+        pe.submit()
+        
+        return {
+            "success": True,
+            "name": pe.name,
+            "message": _("Đã tạo phiếu thanh toán {0}").format(pe.name)
+        }
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "create_payment_for_purchase_invoice Error")
+        return {
+            "success": False,
+            "message": _parse_friendly_error(str(e))
+        }
+
+
+@frappe.whitelist()
+def get_mode_of_payments():
+    """
+    Lấy danh sách hình thức thanh toán
+    
+    Returns:
+        list: Danh sách mode of payment
+    """
+    modes = frappe.get_all(
+        "Mode of Payment",
+        filters={"enabled": 1},
+        fields=["name", "type"],
+        order_by="name"
+    )
+    return {"success": True, "data": modes}
+
+
+# ============================================
+# SALES INVOICE APIs
+# ============================================
+
+@frappe.whitelist()
+def get_sales_invoices(status=None, customer=None, from_date=None, to_date=None,
+                       search=None, limit=20, page=1):
+    """
+    Lấy danh sách hóa đơn bán hàng
+    
+    Args:
+        status: Lọc theo trạng thái (Draft, Unpaid, Paid, Overdue, Cancelled)
+        customer: Lọc theo khách hàng
+        from_date: Ngày bắt đầu
+        to_date: Ngày kết thúc
+        search: Tìm kiếm theo mã hóa đơn
+        limit: Số bản ghi mỗi trang
+        page: Số trang
+    
+    Returns:
+        dict: {data: list, total: int, page: int, total_pages: int}
+    """
+    filters = {}
+    
+    # Lọc theo status
+    if status:
+        if status == "Draft":
+            filters["docstatus"] = 0
+        elif status == "Cancelled":
+            filters["docstatus"] = 2
+        elif status == "Unpaid":
+            filters["docstatus"] = 1
+            filters["outstanding_amount"] = [">", 0]
+        elif status == "Paid":
+            filters["docstatus"] = 1
+            filters["outstanding_amount"] = 0
+        elif status == "Overdue":
+            filters["docstatus"] = 1
+            filters["outstanding_amount"] = [">", 0]
+            filters["due_date"] = ["<", frappe.utils.today()]
+    
+    if customer:
+        filters["customer"] = customer
+    
+    if from_date:
+        filters["posting_date"] = [">=", from_date]
+    if to_date:
+        if "posting_date" in filters:
+            filters["posting_date"] = ["between", [from_date, to_date]]
+        else:
+            filters["posting_date"] = ["<=", to_date]
+    
+    if search:
+        filters["name"] = ["like", f"%{search}%"]
+    
+    # Pagination
+    limit = int(limit)
+    page = int(page)
+    offset = (page - 1) * limit
+    
+    # Count total
+    total_count = frappe.db.count("Sales Invoice", filters=filters)
+    
+    invoices = frappe.get_all(
+        "Sales Invoice",
+        filters=filters,
+        fields=[
+            "name", "customer", "customer_name", "posting_date", "due_date",
+            "grand_total", "outstanding_amount", "currency", "docstatus",
+            "status", "creation", "owner"
+        ],
+        order_by="creation desc",
+        limit_start=offset,
+        limit_page_length=limit
+    )
+    
+    # Enhance data
+    for inv in invoices:
+        # Lấy số lượng items
+        inv["item_count"] = frappe.db.count("Sales Invoice Item", {"parent": inv.name})
+        
+        # Lấy tên người tạo
+        inv["owner_name"] = frappe.db.get_value("User", inv.owner, "full_name") or inv.owner
+        
+        # Status display
+        if inv.docstatus == 0:
+            inv["status_display"] = "Chờ duyệt"
+            inv["status_color"] = "warning"
+        elif inv.docstatus == 2:
+            inv["status_display"] = "Đã hủy"
+            inv["status_color"] = "gray"
+        elif inv.outstanding_amount == 0:
+            inv["status_display"] = "Đã thanh toán"
+            inv["status_color"] = "success"
+        elif inv.due_date and str(inv.due_date) < frappe.utils.today():
+            inv["status_display"] = "Quá hạn"
+            inv["status_color"] = "error"
+        else:
+            inv["status_display"] = "Chưa thanh toán"
+            inv["status_color"] = "info"
+        
+        # Kiểm tra đã tạo Stock Entry chưa
+        inv["has_stock_entry"] = frappe.db.exists("Stock Entry", {
+            "sales_invoice": inv.name,
+            "docstatus": ["!=", 2]
+        }) or False
+    
+    total_pages = (total_count + limit - 1) // limit if limit > 0 else 1
+    
+    return {
+        "success": True,
+        "data": invoices,
+        "total": total_count,
+        "page": page,
+        "page_size": limit,
+        "total_pages": total_pages
+    }
+
+
+@frappe.whitelist()
+def get_sales_invoice_detail(name):
+    """
+    Lấy chi tiết hóa đơn bán hàng
+    
+    Args:
+        name: Mã hóa đơn
+    
+    Returns:
+        dict: Chi tiết hóa đơn
+    """
+    if not frappe.db.exists("Sales Invoice", name):
+        return {"success": False, "message": _("Không tìm thấy hóa đơn {0}").format(name)}
+    
+    doc = frappe.get_doc("Sales Invoice", name)
+    
+    # Lấy thông tin items
+    items = []
+    for item in doc.items:
+        # Lấy tồn kho hiện tại
+        actual_qty = 0
+        if item.warehouse:
+            actual_qty = frappe.db.get_value("Bin", {
+                "item_code": item.item_code,
+                "warehouse": item.warehouse
+            }, "actual_qty") or 0
+        
+        items.append({
+            "item_code": item.item_code,
+            "item_name": item.item_name,
+            "qty": item.qty,
+            "uom": item.uom,
+            "rate": item.rate,
+            "amount": item.amount,
+            "warehouse": item.warehouse,
+            "delivered_qty": item.delivered_qty or 0,
+            "stock_qty": item.stock_qty or item.qty,
+            "actual_qty": actual_qty
+        })
+    
+    # Lấy tên người thực hiện
+    owner_name = frappe.db.get_value("User", doc.owner, "full_name") or doc.owner
+    
+    # Lấy Stock Entries liên quan (dùng sales_invoice_no)
+    stock_entries = frappe.get_all(
+        "Stock Entry",
+        filters={"sales_invoice_no": name, "docstatus": ["!=", 2]},
+        fields=["name", "purpose", "posting_date", "docstatus", "creation"],
+        order_by="creation desc"
+    )
+    
+    # Status display
+    if doc.docstatus == 0:
+        status_display = "Chờ duyệt"
+        status_color = "warning"
+    elif doc.docstatus == 2:
+        status_display = "Đã hủy"
+        status_color = "gray"
+    elif doc.outstanding_amount == 0:
+        status_display = "Đã thanh toán"
+        status_color = "success"
+    elif doc.due_date and str(doc.due_date) < frappe.utils.today():
+        status_display = "Quá hạn"
+        status_color = "error"
+    else:
+        status_display = "Chưa thanh toán"
+        status_color = "info"
+    
+    return {
+        "success": True,
+        "name": doc.name,
+        "customer": doc.customer,
+        "customer_name": doc.customer_name,
+        "posting_date": str(doc.posting_date),
+        "due_date": str(doc.due_date) if doc.due_date else None,
+        "grand_total": doc.grand_total,
+        "net_total": doc.net_total,
+        "total_taxes_and_charges": doc.total_taxes_and_charges,
+        "outstanding_amount": doc.outstanding_amount,
+        "currency": doc.currency,
+        "docstatus": doc.docstatus,
+        "status": doc.status,
+        "status_display": status_display,
+        "status_color": status_color,
+        "is_paid": doc.outstanding_amount == 0,
+        "remarks": doc.remarks,
+        "items": items,
+        "stock_entries": stock_entries,
+        "owner": doc.owner,
+        "owner_name": owner_name,
+        "creation": str(doc.creation),
+        "modified": str(doc.modified),
+        "set_warehouse": doc.set_warehouse,
+        "update_stock": doc.update_stock
+    }
+
+
+@frappe.whitelist()
+def create_sales_invoice(customer, items, posting_date=None, due_date=None,
+                         set_warehouse=None, remarks=None, update_stock=0):
+    """
+    Tạo hóa đơn bán hàng mới (Draft)
+    
+    Args:
+        customer: Mã khách hàng
+        items: Danh sách sản phẩm (JSON array)
+            [{"item_code": "SP-001", "qty": 10, "rate": 5000, "warehouse": "Kho Chính"}]
+        posting_date: Ngày hóa đơn
+        due_date: Ngày đến hạn thanh toán
+        set_warehouse: Kho mặc định cho tất cả items
+        remarks: Ghi chú
+        update_stock: Cập nhật tồn kho trực tiếp (0 = không, 1 = có)
+    
+    Returns:
+        dict: {success: bool, name: str, message: str}
+    """
+    import json
+    
+    try:
+        # Validate customer
+        if not frappe.db.exists("Customer", customer):
+            return {"success": False, "message": _("Khách hàng không tồn tại.")}
+        
+        # Parse items
+        if items and isinstance(items, str):
+            items = json.loads(items)
+        
+        if not items or len(items) == 0:
+            return {"success": False, "message": _("Vui lòng thêm ít nhất một sản phẩm.")}
+        
+        company = frappe.defaults.get_user_default("Company") or frappe.db.get_single_value("Global Defaults", "default_company")
+        
+        if not company:
+            return {"success": False, "message": _("Chưa thiết lập công ty mặc định.")}
+        
+        # Tạo Sales Invoice
+        doc = frappe.new_doc("Sales Invoice")
+        doc.customer = customer
+        doc.company = company
+        doc.update_stock = int(update_stock)
+        
+        if posting_date:
+            doc.posting_date = posting_date
+        
+        if due_date:
+            doc.due_date = due_date
+        
+        if set_warehouse:
+            doc.set_warehouse = set_warehouse
+        
+        if remarks:
+            doc.remarks = remarks
+        
+        # Add items
+        for item_data in items:
+            row = doc.append("items", {})
+            row.item_code = item_data.get("item_code")
+            row.qty = float(item_data.get("qty", 0))
+            row.rate = float(item_data.get("rate", 0))
+            if item_data.get("warehouse"):
+                row.warehouse = item_data.get("warehouse")
+            elif set_warehouse:
+                row.warehouse = set_warehouse
+        
+        doc.insert()
+        
+        return {
+            "success": True,
+            "name": doc.name,
+            "message": _("Đã tạo hóa đơn bán hàng {0}").format(doc.name)
+        }
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "create_sales_invoice Error")
+        return {
+            "success": False,
+            "message": _parse_friendly_error(str(e))
+        }
+
+
+@frappe.whitelist()
+def submit_sales_invoice(name):
+    """
+    Duyệt hóa đơn bán hàng
+    
+    Args:
+        name: Mã hóa đơn
+    
+    Returns:
+        dict: {success: bool, message: str}
+    """
+    try:
+        if not frappe.db.exists("Sales Invoice", name):
+            return {"success": False, "message": _("Không tìm thấy hóa đơn.")}
+        
+        doc = frappe.get_doc("Sales Invoice", name)
+        
+        if doc.docstatus == 1:
+            return {"success": False, "message": _("Hóa đơn đã được duyệt trước đó.")}
+        elif doc.docstatus == 2:
+            return {"success": False, "message": _("Hóa đơn đã bị hủy, không thể duyệt.")}
+        
+        doc.submit()
+        
+        return {
+            "success": True,
+            "message": _("Đã duyệt hóa đơn bán hàng {0}").format(name)
+        }
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "submit_sales_invoice Error")
+        return {
+            "success": False,
+            "message": _parse_friendly_error(str(e))
+        }
+
+
+@frappe.whitelist()
+def cancel_sales_invoice(name):
+    """
+    Hủy hóa đơn bán hàng
+    
+    Args:
+        name: Mã hóa đơn
+    
+    Returns:
+        dict: {success: bool, message: str}
+    """
+    try:
+        if not frappe.db.exists("Sales Invoice", name):
+            return {"success": False, "message": _("Không tìm thấy hóa đơn.")}
+        
+        doc = frappe.get_doc("Sales Invoice", name)
+        
+        if doc.docstatus == 0:
+            # Draft - just delete
+            doc.delete()
+            return {
+                "success": True,
+                "message": _("Đã xóa hóa đơn bán hàng.")
+            }
+        elif doc.docstatus == 2:
+            return {"success": False, "message": _("Hóa đơn đã bị hủy trước đó.")}
+        
+        # Check if has linked stock entries
+        stock_entries = frappe.get_all("Stock Entry",
+            filters={"sales_invoice": name, "docstatus": 1},
+            limit=1
+        )
+        if stock_entries:
+            return {
+                "success": False,
+                "message": _("Không thể hủy vì đã có phiếu xuất kho liên kết. Vui lòng hủy phiếu xuất kho trước.")
+            }
+        
+        doc.cancel()
+        
+        return {
+            "success": True,
+            "message": _("Đã hủy hóa đơn bán hàng {0}").format(name)
+        }
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "cancel_sales_invoice Error")
+        return {
+            "success": False,
+            "message": _parse_friendly_error(str(e))
+        }
+
+
+@frappe.whitelist()
+def create_stock_entry_from_sales_invoice(sales_invoice, warehouse=None):
+    """
+    Tạo phiếu xuất kho từ hóa đơn bán hàng
+    
+    Args:
+        sales_invoice: Mã hóa đơn bán hàng
+        warehouse: Kho xuất (nếu không truyền sẽ lấy từ Invoice)
+    
+    Returns:
+        dict: {success: bool, name: str, message: str}
+    """
+    try:
+        if not frappe.db.exists("Sales Invoice", sales_invoice):
+            return {"success": False, "message": _("Không tìm thấy hóa đơn bán hàng.")}
+        
+        si = frappe.get_doc("Sales Invoice", sales_invoice)
+        
+        if si.docstatus != 1:
+            return {"success": False, "message": _("Hóa đơn chưa được duyệt. Vui lòng duyệt hóa đơn trước.")}
+        
+        if si.update_stock:
+            return {"success": False, "message": _("Hóa đơn này đã cập nhật tồn kho trực tiếp, không cần tạo phiếu xuất kho.")}
+        
+        # Check if already has stock entry (dùng sales_invoice_no)
+        existing = frappe.get_all("Stock Entry",
+            filters={"sales_invoice_no": sales_invoice, "docstatus": ["!=", 2]},
+            limit=1
+        )
+        if existing:
+            return {"success": False, "message": _("Đã có phiếu xuất kho cho hóa đơn này: {0}").format(existing[0].name)}
+        
+        # Check stock availability
+        source_warehouse = warehouse or si.set_warehouse
+        insufficient_items = []
+        
+        for item in si.items:
+            item_warehouse = item.warehouse or source_warehouse
+            actual_qty = frappe.db.get_value("Bin", {
+                "item_code": item.item_code,
+                "warehouse": item_warehouse
+            }, "actual_qty") or 0
+            
+            if actual_qty < item.qty:
+                item_name = frappe.db.get_value("Item", item.item_code, "item_name") or item.item_code
+                insufficient_items.append({
+                    "item_code": item.item_code,
+                    "item_name": item_name,
+                    "required": item.qty,
+                    "available": actual_qty,
+                    "warehouse": item_warehouse
+                })
+        
+        if insufficient_items:
+            error_lines = [_("Không đủ tồn kho để xuất:")]
+            for item in insufficient_items:
+                error_lines.append(
+                    f"• {item['item_name']}: Cần {item['required']}, Có {item['available']} tại {item['warehouse']}"
+                )
+            return {
+                "success": False,
+                "message": "\n".join(error_lines),
+                "insufficient_items": insufficient_items
+            }
+        
+        # Create Stock Entry
+        doc = frappe.new_doc("Stock Entry")
+        doc.purpose = "Material Issue"
+        doc.stock_entry_type = "Material Issue"
+        doc.company = si.company
+        doc.sales_invoice_no = sales_invoice  # Đúng field name trong Stock Entry
+        doc.remarks = _("Xuất kho từ hóa đơn bán hàng: {0}").format(sales_invoice)
+        
+        for item in si.items:
+            row = doc.append("items", {})
+            row.item_code = item.item_code
+            row.qty = item.qty
+            row.s_warehouse = item.warehouse or source_warehouse
+        
+        doc.insert()
+        doc.submit()
+        
+        return {
+            "success": True,
+            "name": doc.name,
+            "message": _("Đã tạo phiếu xuất kho {0}").format(doc.name)
+        }
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "create_stock_entry_from_sales_invoice Error")
+        return {
+            "success": False,
+            "message": _parse_friendly_error(str(e))
+        }
+
+
+@frappe.whitelist()
+def create_payment_for_sales_invoice(sales_invoice, amount=None, mode_of_payment=None,
+                                     reference_no=None, reference_date=None):
+    """
+    Tạo thanh toán (thu tiền) cho hóa đơn bán hàng
+    
+    Args:
+        sales_invoice: Mã hóa đơn bán hàng
+        amount: Số tiền thanh toán (nếu không truyền sẽ thanh toán toàn bộ)
+        mode_of_payment: Hình thức thanh toán (Cash, Bank Transfer, etc.)
+        reference_no: Số tham chiếu (số chứng từ ngân hàng, etc.)
+        reference_date: Ngày tham chiếu
+    
+    Returns:
+        dict: {success: bool, name: str, message: str}
+    """
+    try:
+        if not frappe.db.exists("Sales Invoice", sales_invoice):
+            return {"success": False, "message": _("Không tìm thấy hóa đơn bán hàng.")}
+        
+        si = frappe.get_doc("Sales Invoice", sales_invoice)
+        
+        if si.docstatus != 1:
+            return {"success": False, "message": _("Hóa đơn chưa được duyệt. Vui lòng duyệt hóa đơn trước.")}
+        
+        if si.outstanding_amount <= 0:
+            return {"success": False, "message": _("Hóa đơn đã được thanh toán đầy đủ.")}
+        
+        # Determine payment amount
+        payment_amount = float(amount) if amount else si.outstanding_amount
+        
+        if payment_amount > si.outstanding_amount:
+            return {"success": False, "message": _("Số tiền thanh toán ({0}) vượt quá số tiền còn nợ ({1}).").format(
+                payment_amount, si.outstanding_amount
+            )}
+        
+        if payment_amount <= 0:
+            return {"success": False, "message": _("Số tiền thanh toán phải lớn hơn 0.")}
+        
+        # Get default accounts
+        company = si.company
+        default_mode = mode_of_payment or "Cash"
+        
+        # Get payment account (Cash/Bank) from Mode of Payment
+        mode_of_payment_doc = frappe.get_doc("Mode of Payment", default_mode) if frappe.db.exists("Mode of Payment", default_mode) else None
+        
+        paid_to_account = None
+        if mode_of_payment_doc:
+            for acc in mode_of_payment_doc.accounts:
+                if acc.company == company:
+                    paid_to_account = acc.default_account
+                    break
+        
+        if not paid_to_account:
+            # Fallback to default cash/bank account
+            paid_to_account = frappe.db.get_value("Company", company, "default_cash_account") or \
+                              frappe.db.get_value("Company", company, "default_bank_account")
+        
+        if not paid_to_account:
+            return {"success": False, "message": _("Chưa thiết lập tài khoản tiền mặt/ngân hàng mặc định cho công ty hoặc hình thức thanh toán.")}
+        
+        # Create Payment Entry
+        # For "Receive" type: paid_from = Receivables (source), paid_to = Cash/Bank (destination)
+        pe = frappe.new_doc("Payment Entry")
+        pe.payment_type = "Receive"
+        pe.posting_date = frappe.utils.today()
+        pe.company = company
+        pe.mode_of_payment = default_mode
+        pe.party_type = "Customer"
+        pe.party = si.customer
+        pe.party_name = si.customer_name
+        pe.paid_from = si.debit_to  # Receivables/Debtors account from invoice
+        pe.paid_to = paid_to_account  # Cash/Bank account (destination of money)
+        pe.paid_amount = payment_amount
+        pe.received_amount = payment_amount
+        pe.source_exchange_rate = 1
+        pe.target_exchange_rate = 1
+        
+        if reference_no:
+            pe.reference_no = reference_no
+        if reference_date:
+            pe.reference_date = reference_date
+        
+        # Add reference to the invoice
+        pe.append("references", {
+            "reference_doctype": "Sales Invoice",
+            "reference_name": sales_invoice,
+            "total_amount": si.grand_total,
+            "outstanding_amount": si.outstanding_amount,
+            "allocated_amount": payment_amount
+        })
+        
+        pe.insert()
+        pe.submit()
+        
+        return {
+            "success": True,
+            "name": pe.name,
+            "message": _("Đã tạo phiếu thu tiền {0}").format(pe.name)
+        }
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "create_payment_for_sales_invoice Error")
+        return {
+            "success": False,
+            "message": _parse_friendly_error(str(e))
+        }

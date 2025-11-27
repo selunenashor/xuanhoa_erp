@@ -147,6 +147,52 @@
         <p class="text-gray-700">{{ entry.remarks }}</p>
       </div>
 
+      <!-- Linked Invoice -->
+      <div v-if="entry.purchase_invoice || entry.sales_invoice" class="bg-white rounded-lg shadow p-6">
+        <h3 class="text-sm font-medium text-gray-500 uppercase tracking-wider mb-4">Hóa đơn liên kết</h3>
+        <div class="flex flex-wrap gap-4">
+          <!-- Purchase Invoice Link -->
+          <router-link
+            v-if="entry.purchase_invoice"
+            :to="`/purchasing/invoices/${entry.purchase_invoice}`"
+            class="inline-flex items-center gap-3 px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
+          >
+            <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            <div>
+              <p class="text-sm font-medium text-blue-700">Hóa đơn mua hàng</p>
+              <p class="text-sm text-blue-600">{{ entry.purchase_invoice }}</p>
+            </div>
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+            </svg>
+          </router-link>
+
+          <!-- Sales Invoice Link -->
+          <router-link
+            v-if="entry.sales_invoice"
+            :to="`/selling/invoices/${entry.sales_invoice}`"
+            class="inline-flex items-center gap-3 px-4 py-3 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition-colors"
+          >
+            <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+            </div>
+            <div>
+              <p class="text-sm font-medium text-green-700">Hóa đơn bán hàng</p>
+              <p class="text-sm text-green-600">{{ entry.sales_invoice }}</p>
+            </div>
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+            </svg>
+          </router-link>
+        </div>
+      </div>
+
       <!-- Items Table - Simple view for basic types -->
       <div v-if="!isTransferType" class="bg-white rounded-lg shadow">
         <div class="px-6 py-4 border-b border-gray-200">

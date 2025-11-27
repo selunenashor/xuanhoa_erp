@@ -1,5 +1,6 @@
 mode_of_payment,enabled,type
-Tiền mặt,1,Cash
-Chuyển khoản ngân hàng,1,Bank
-Thẻ tín dụng,1,Bank
-Ví điện tử,1,General
+Cash,1,Cash
+Wire Transfer,1,Bank
+Cheque,1,Bank
+Credit Card,1,Bank
+Bank Draft,1,Bank

@@ -501,6 +501,130 @@ def import_items():
     return count
 
 
+def import_item_prices():
+    """Import Item Prices"""
+    print("\n📦 Import Item Prices...")
+    count = 0
+    
+    for row in read_csv('item_price.csv'):
+        item_code = row['item_code']
+        price_list = row['price_list']
+        
+        # Check if price already exists
+        existing = frappe.db.exists('Item Price', {
+            'item_code': item_code,
+            'price_list': price_list
+        })
+        if existing:
+            continue
+        
+        frappe.get_doc({
+            'doctype': 'Item Price',
+            'item_code': item_code,
+            'price_list': price_list,
+            'price_list_rate': flt(row['price_list_rate']),
+            'selling': cint(row.get('selling', 0)),
+            'buying': cint(row.get('buying', 0))
+        }).insert(ignore_permissions=True)
+        count += 1
+    
+    frappe.db.commit()
+    print(f"  ✅ {count} Item Prices")
+    return count
+
+
+def setup_accounts():
+    """Tạo accounts cần thiết (Bank accounts)"""
+    print("\n📦 Setup Bank Accounts...")
+    count = 0
+    
+    # Kiểm tra và tạo Bank Accounts
+    bank_accounts = [
+        {
+            'account_name': 'Ngân hàng Nội địa',
+            'parent_account': 'Bank Accounts - XHTB',
+            'account_type': 'Bank',
+            'company': COMPANY,
+            'account_currency': 'VND'
+        },
+        {
+            'account_name': 'Ngân hàng Quốc tế',
+            'parent_account': 'Bank Accounts - XHTB',
+            'account_type': 'Bank',
+            'company': COMPANY,
+            'account_currency': 'VND'
+        }
+    ]
+    
+    for acc in bank_accounts:
+        account_name = f"{acc['account_name']} - XHTB"
+        if not frappe.db.exists('Account', account_name):
+            try:
+                frappe.get_doc({
+                    'doctype': 'Account',
+                    **acc
+                }).insert(ignore_permissions=True)
+                count += 1
+                print(f"  ✅ {account_name}")
+            except Exception as e:
+                print(f"  ⚠️  {account_name}: {e}")
+    
+    frappe.db.commit()
+    print(f"  ✅ {count} Bank Accounts created")
+    return count
+
+
+def setup_mode_of_payment_accounts():
+    """Setup Mode of Payment với Account liên kết"""
+    print("\n📦 Setup Mode of Payment Accounts...")
+    count = 0
+    
+    # Mapping Mode of Payment với Account
+    mop_accounts = [
+        ('Cash', 'Cash - XHTB'),
+        ('Wire Transfer', 'Ngân hàng Quốc tế - XHTB'),
+        ('Cheque', 'Ngân hàng Nội địa - XHTB'),
+        ('Credit Card', 'Ngân hàng Nội địa - XHTB'),
+        ('Bank Draft', 'Ngân hàng Nội địa - XHTB'),
+    ]
+    
+    for mop_name, account in mop_accounts:
+        if not frappe.db.exists('Mode of Payment', mop_name):
+            print(f"  ⚠️  Mode of Payment '{mop_name}' không tồn tại")
+            continue
+        
+        if not frappe.db.exists('Account', account):
+            print(f"  ⚠️  Account '{account}' không tồn tại")
+            continue
+        
+        mop = frappe.get_doc('Mode of Payment', mop_name)
+        
+        # Check if account already linked for this company
+        existing = False
+        for acc in mop.accounts:
+            if acc.company == COMPANY:
+                if acc.default_account != account:
+                    acc.default_account = account
+                    mop.save(ignore_permissions=True)
+                    count += 1
+                    print(f"  ✅ {mop_name} -> {account} (updated)")
+                existing = True
+                break
+        
+        if not existing:
+            mop.append('accounts', {
+                'company': COMPANY,
+                'default_account': account
+            })
+            mop.save(ignore_permissions=True)
+            count += 1
+            print(f"  ✅ {mop_name} -> {account}")
+    
+    frappe.db.commit()
+    print(f"  ✅ {count} Mode of Payment Accounts")
+    return count
+
+
 def import_boms():
     """Import BOMs"""
     print("\n📦 Import BOMs...")
@@ -817,6 +941,11 @@ def run():
     import_suppliers()
     import_customers()
     import_items()
+    import_item_prices()
+    
+    # Step 2.5: Setup accounting
+    setup_accounts()
+    setup_mode_of_payment_accounts()
     
     # Step 3: Import manufacturing
     import_boms()
@@ -831,6 +960,8 @@ def run():
     print("\n📝 LƯU Ý:")
     print("  - Permissions đã được thiết lập cho các DocTypes")
     print("  - Users đã được tạo với đầy đủ roles")
+    print("  - Item Prices đã được tạo (giá mua và bán)")
+    print("  - Bank Accounts và Mode of Payment đã được thiết lập")
     print("  - BOM đã được submit, sẵn sàng sử dụng")
     print("  - Work Order ở trạng thái Draft, cần Submit để sản xuất")
     print("  - Purchase Receipt đã submit, tồn kho NVL đã được cập nhật")
@@ -857,3 +988,48 @@ def run_users_only():
     setup_users()
     
     print("\n✅ Hoàn tất!")
+
+
+def run_master_data_only():
+    """Import master data mà KHÔNG xóa giao dịch hiện có"""
+    print("\n" + "="*60)
+    print("📥 IMPORT MASTER DATA (KHÔNG XÓA GIAO DỊCH)")
+    print("="*60)
+    
+    # Setup permissions and users
+    setup_role_permissions()
+    setup_users()
+    
+    # Import master data
+    import_item_groups()
+    import_supplier_groups()
+    import_customer_groups()
+    import_territories()
+    import_warehouses()
+    import_suppliers()
+    import_customers()
+    import_items()
+    import_item_prices()
+    
+    # Setup accounting
+    setup_accounts()
+    setup_mode_of_payment_accounts()
+    
+    # Import BOMs only (không xóa)
+    import_boms()
+    
+    print("\n✅ Hoàn tất import master data!")
+    print("📝 Giao dịch hiện có (Invoice, Stock Entry, Payment...) được giữ nguyên")
+
+
+def run_accounting_setup():
+    """Chỉ setup accounting (Bank accounts, Mode of Payment)"""
+    print("\n" + "="*60)
+    print("💰 SETUP ACCOUNTING")
+    print("="*60)
+    
+    setup_accounts()
+    setup_mode_of_payment_accounts()
+    
+    print("\n✅ Hoàn tất!")
+

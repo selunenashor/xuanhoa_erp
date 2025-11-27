@@ -351,4 +351,254 @@ export const dashboardAPI = {
   }
 }
 
+// ==================== ITEM APIs ====================
+
+export const itemAPI = {
+  /**
+   * Get list of items with optional search
+   * @param {Object} params - { search, page_size }
+   */
+  getList: async (params = {}) => {
+    const res = await api.post('/method/xuanhoa_app.api.search_items', { 
+      query: params.search || '',
+      item_group: params.item_group || null,
+      warehouse: params.warehouse || null
+    })
+    return { success: true, data: res.data.message || [] }
+  }
+}
+
+// ==================== WAREHOUSE APIs ====================
+
+export const warehouseAPI = {
+  /**
+   * Get list of warehouses
+   * @param {Object} params - { is_group }
+   */
+  getList: async (params = {}) => {
+    const res = await api.post('/method/xuanhoa_app.api.get_warehouses', { 
+      is_group: params.is_group || 0 
+    })
+    return { success: true, data: res.data.message || [] }
+  }
+}
+
+// ==================== SUPPLIER APIs ====================
+
+export const supplierAPI = {
+  /**
+   * Get list of suppliers
+   * @param {string|null} query - Search query
+   * @param {number} limit - Max results
+   */
+  getList: async (query = null, limit = 20) => {
+    const res = await api.post('/method/xuanhoa_app.api.get_suppliers', { query, limit })
+    return res.data.message
+  }
+}
+
+// ==================== CUSTOMER APIs ====================
+
+export const customerAPI = {
+  /**
+   * Get list of customers
+   * @param {string|null} query - Search query
+   * @param {number} limit - Max results
+   */
+  getList: async (query = null, limit = 20) => {
+    const res = await api.post('/method/xuanhoa_app.api.get_customers', { query, limit })
+    return res.data.message
+  }
+}
+
+// ==================== PURCHASE INVOICE APIs ====================
+
+export const purchaseInvoiceAPI = {
+  /**
+   * Get list of purchase invoices
+   * @param {Object} params - { status, supplier, from_date, to_date, search, limit, page }
+   */
+  getList: async (params = {}) => {
+    const res = await api.post('/method/xuanhoa_app.api.get_purchase_invoices', params)
+    return res.data.message
+  },
+
+  /**
+   * Get purchase invoice detail
+   * @param {string} name - Invoice ID
+   */
+  getDetail: async (name) => {
+    const res = await api.post('/method/xuanhoa_app.api.get_purchase_invoice_detail', { name })
+    return res.data.message
+  },
+
+  /**
+   * Create new purchase invoice (Draft)
+   * @param {Object} data - { supplier, items, posting_date, due_date, set_warehouse, remarks, update_stock }
+   */
+  create: async (data) => {
+    const res = await api.post('/method/xuanhoa_app.api.create_purchase_invoice', {
+      supplier: data.supplier,
+      items: JSON.stringify(data.items),
+      posting_date: data.posting_date,
+      due_date: data.due_date,
+      set_warehouse: data.set_warehouse,
+      remarks: data.remarks,
+      update_stock: data.update_stock || 0
+    })
+    return res.data.message
+  },
+
+  /**
+   * Submit/Approve purchase invoice
+   * @param {string} name - Invoice ID
+   */
+  submit: async (name) => {
+    const res = await api.post('/method/xuanhoa_app.api.submit_purchase_invoice', { name })
+    return res.data.message
+  },
+
+  /**
+   * Cancel purchase invoice
+   * @param {string} name - Invoice ID
+   */
+  cancel: async (name) => {
+    const res = await api.post('/method/xuanhoa_app.api.cancel_purchase_invoice', { name })
+    return res.data.message
+  },
+
+  /**
+   * Create stock entry (Material Receipt) from purchase invoice
+   * @param {string} purchaseInvoice - Invoice ID
+   * @param {string|null} warehouse - Target warehouse (optional)
+   */
+  createStockEntry: async (purchaseInvoice, warehouse = null) => {
+    const res = await api.post('/method/xuanhoa_app.api.create_stock_entry_from_purchase_invoice', {
+      purchase_invoice: purchaseInvoice,
+      warehouse
+    })
+    return res.data.message
+  },
+
+  /**
+   * Create payment for purchase invoice
+   * @param {string} purchaseInvoice - Invoice ID
+   * @param {number|null} amount - Payment amount (optional, defaults to full outstanding)
+   * @param {string|null} modeOfPayment - Mode of payment (Cash, Bank, etc.)
+   * @param {string|null} referenceNo - Reference number
+   * @param {string|null} referenceDate - Reference date
+   */
+  createPayment: async (purchaseInvoice, amount = null, modeOfPayment = null, referenceNo = null, referenceDate = null) => {
+    const res = await api.post('/method/xuanhoa_app.api.create_payment_for_purchase_invoice', {
+      purchase_invoice: purchaseInvoice,
+      amount,
+      mode_of_payment: modeOfPayment,
+      reference_no: referenceNo,
+      reference_date: referenceDate
+    })
+    return res.data.message
+  }
+}
+
+// ==================== SALES INVOICE APIs ====================
+
+export const salesInvoiceAPI = {
+  /**
+   * Get list of sales invoices
+   * @param {Object} params - { status, customer, from_date, to_date, search, limit, page }
+   */
+  getList: async (params = {}) => {
+    const res = await api.post('/method/xuanhoa_app.api.get_sales_invoices', params)
+    return res.data.message
+  },
+
+  /**
+   * Get sales invoice detail
+   * @param {string} name - Invoice ID
+   */
+  getDetail: async (name) => {
+    const res = await api.post('/method/xuanhoa_app.api.get_sales_invoice_detail', { name })
+    return res.data.message
+  },
+
+  /**
+   * Create new sales invoice (Draft)
+   * @param {Object} data - { customer, items, posting_date, due_date, set_warehouse, remarks, update_stock }
+   */
+  create: async (data) => {
+    const res = await api.post('/method/xuanhoa_app.api.create_sales_invoice', {
+      customer: data.customer,
+      items: JSON.stringify(data.items),
+      posting_date: data.posting_date,
+      due_date: data.due_date,
+      set_warehouse: data.set_warehouse,
+      remarks: data.remarks,
+      update_stock: data.update_stock || 0
+    })
+    return res.data.message
+  },
+
+  /**
+   * Submit/Approve sales invoice
+   * @param {string} name - Invoice ID
+   */
+  submit: async (name) => {
+    const res = await api.post('/method/xuanhoa_app.api.submit_sales_invoice', { name })
+    return res.data.message
+  },
+
+  /**
+   * Cancel sales invoice
+   * @param {string} name - Invoice ID
+   */
+  cancel: async (name) => {
+    const res = await api.post('/method/xuanhoa_app.api.cancel_sales_invoice', { name })
+    return res.data.message
+  },
+
+  /**
+   * Create stock entry (Material Issue) from sales invoice
+   * @param {string} salesInvoice - Invoice ID
+   * @param {string|null} warehouse - Source warehouse (optional)
+   */
+  createStockEntry: async (salesInvoice, warehouse = null) => {
+    const res = await api.post('/method/xuanhoa_app.api.create_stock_entry_from_sales_invoice', {
+      sales_invoice: salesInvoice,
+      warehouse
+    })
+    return res.data.message
+  },
+
+  /**
+   * Create payment (receive) for sales invoice
+   * @param {string} salesInvoice - Invoice ID
+   * @param {number|null} amount - Payment amount (optional, defaults to full outstanding)
+   * @param {string|null} modeOfPayment - Mode of payment (Cash, Bank, etc.)
+   * @param {string|null} referenceNo - Reference number
+   * @param {string|null} referenceDate - Reference date
+   */
+  createPayment: async (salesInvoice, amount = null, modeOfPayment = null, referenceNo = null, referenceDate = null) => {
+    const res = await api.post('/method/xuanhoa_app.api.create_payment_for_sales_invoice', {
+      sales_invoice: salesInvoice,
+      amount,
+      mode_of_payment: modeOfPayment,
+      reference_no: referenceNo,
+      reference_date: referenceDate
+    })
+    return res.data.message
+  }
+}
+
+// ==================== PAYMENT APIs ====================
+
+export const paymentAPI = {
+  /**
+   * Get list of payment modes
+   */
+  getModes: async () => {
+    const res = await api.post('/method/xuanhoa_app.api.get_mode_of_payments')
+    return res.data.message
+  }
+}
+
 export default api

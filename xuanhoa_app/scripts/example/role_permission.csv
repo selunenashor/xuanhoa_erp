@@ -20,6 +20,7 @@ Purchase Invoice,System Manager,1,1,1,1,1,1,1,1,1,1,1,1,1
 Purchase Invoice,Accounts Manager,1,1,1,1,1,1,1,1,1,1,1,1,1
 Purchase Invoice,Accounts User,1,1,1,0,1,0,0,1,1,0,0,1,1
 Purchase Invoice,Purchase Manager,1,1,1,1,1,1,1,1,1,1,1,1,1
+Purchase Invoice,Purchase User,1,1,1,0,1,0,0,1,1,0,0,1,1
 Delivery Note,System Manager,1,1,1,1,1,1,1,1,1,1,1,1,1
 Delivery Note,Stock Manager,1,1,1,1,1,1,1,1,1,1,1,1,1
 Delivery Note,Stock User,1,1,1,0,1,0,0,1,1,0,0,1,1
@@ -29,6 +30,12 @@ Sales Invoice,System Manager,1,1,1,1,1,1,1,1,1,1,1,1,1
 Sales Invoice,Accounts Manager,1,1,1,1,1,1,1,1,1,1,1,1,1
 Sales Invoice,Accounts User,1,1,1,0,1,0,0,1,1,0,0,1,1
 Sales Invoice,Sales Manager,1,1,1,1,1,1,1,1,1,1,1,1,1
+Sales Invoice,Sales User,1,1,1,0,1,0,0,1,1,0,0,1,1
+Payment Entry,System Manager,1,1,1,1,1,1,1,1,1,1,1,1,1
+Payment Entry,Accounts Manager,1,1,1,1,1,1,1,1,1,1,1,1,1
+Payment Entry,Accounts User,1,1,1,0,1,0,0,1,1,0,0,1,1
+Payment Entry,Purchase Manager,1,1,1,0,1,0,0,1,1,0,0,1,1
+Payment Entry,Sales Manager,1,1,1,0,1,0,0,1,1,0,0,1,1
 Item,System Manager,1,1,1,1,0,0,0,1,1,1,1,1,1
 Item,Stock Manager,1,1,1,1,0,0,0,1,1,1,1,1,1
 Item,Stock User,1,0,0,0,0,0,0,1,1,0,0,1,0

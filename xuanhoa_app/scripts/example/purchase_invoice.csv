@@ -1,4 +1,4 @@
 name,naming_series,supplier,posting_date,due_date,company,bill_no,bill_date,credit_to,grand_total,outstanding_amount,is_paid,status
-PINV-001,ACC-PINV-.YYYY.-,NCC Linh Kiện Hà Nội,2024-01-10,2024-02-10,XUÂN HÒA THÁI BÌNH,HĐ-001,2024-01-10,Accounts Payable - XHTB,1700000,0,1,Paid
-PINV-002,ACC-PINV-.YYYY.-,Công Ty Điện Tử Trung Quốc,2024-01-11,2024-02-11,XUÂN HÒA THÁI BÌNH,HĐ-TQ-001,2024-01-11,Accounts Payable - XHTB,6750000,6750000,0,Unpaid
-PINV-003,ACC-PINV-.YYYY.-,NCC Cơ Khí Hải Phòng,2024-01-12,2024-02-12,XUÂN HÒA THÁI BÌNH,HĐ-HP-001,2024-01-12,Accounts Payable - XHTB,2350000,2350000,0,Unpaid
+PINV-001,ACC-PINV-.YYYY.-,NCC Linh Kiện Hà Nội,2024-01-10,2024-02-10,Xuân Hòa Thái Bình,HĐ-001,2024-01-10,Accounts Payable - XHTB,1700000,0,1,Paid
+PINV-002,ACC-PINV-.YYYY.-,Công Ty Điện Tử Trung Quốc,2024-01-11,2024-02-11,Xuân Hòa Thái Bình,HĐ-TQ-001,2024-01-11,Accounts Payable - XHTB,6750000,6750000,0,Unpaid
+PINV-003,ACC-PINV-.YYYY.-,NCC Cơ Khí Hải Phòng,2024-01-12,2024-02-12,Xuân Hòa Thái Bình,HĐ-HP-001,2024-01-12,Accounts Payable - XHTB,2350000,2350000,0,Unpaid
