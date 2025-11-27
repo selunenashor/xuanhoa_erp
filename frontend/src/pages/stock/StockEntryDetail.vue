@@ -83,13 +83,21 @@
               <dt class="text-sm text-gray-500">Giờ:</dt>
               <dd class="text-sm font-medium text-gray-900">{{ formatTime(entry.posting_time) }}</dd>
             </div>
-            <div class="flex justify-between">
+            <div v-if="!isTransferType" class="flex justify-between">
               <dt class="text-sm text-gray-500">Kho:</dt>
               <dd class="text-sm font-medium text-gray-900">{{ getWarehouseDisplay(entry) }}</dd>
             </div>
             <div class="flex justify-between">
               <dt class="text-sm text-gray-500">Công ty:</dt>
               <dd class="text-sm font-medium text-gray-900">{{ entry.company }}</dd>
+            </div>
+            <div v-if="entry.work_order" class="flex justify-between">
+              <dt class="text-sm text-gray-500">Lệnh SX:</dt>
+              <dd class="text-sm font-medium text-primary">
+                <router-link :to="`/production/orders/${entry.work_order}`" class="hover:underline">
+                  {{ entry.work_order }}
+                </router-link>
+              </dd>
             </div>
           </dl>
         </div>
@@ -101,10 +109,6 @@
             <div class="flex justify-between">
               <dt class="text-sm text-gray-500">Số sản phẩm:</dt>
               <dd class="text-sm font-medium text-gray-900">{{ entry.items?.length || 0 }}</dd>
-            </div>
-            <div class="flex justify-between">
-              <dt class="text-sm text-gray-500">Tổng số lượng:</dt>
-              <dd class="text-sm font-medium text-gray-900">{{ formatNumber(totalQty) }}</dd>
             </div>
             <div class="flex justify-between">
               <dt class="text-sm text-gray-500">Tổng giá trị:</dt>
@@ -143,8 +147,8 @@
         <p class="text-gray-700">{{ entry.remarks }}</p>
       </div>
 
-      <!-- Items Table -->
-      <div class="bg-white rounded-lg shadow">
+      <!-- Items Table - Simple view for basic types -->
+      <div v-if="!isTransferType" class="bg-white rounded-lg shadow">
         <div class="px-6 py-4 border-b border-gray-200">
           <h3 class="text-lg font-semibold text-gray-900">Chi tiết sản phẩm</h3>
         </div>
@@ -152,49 +156,27 @@
           <table class="min-w-full divide-y divide-gray-200">
             <thead class="bg-gray-50">
               <tr>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  STT
-                </th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Mã sản phẩm
-                </th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Tên sản phẩm
-                </th>
-                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Số lượng
-                </th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  ĐVT
-                </th>
-                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Đơn giá
-                </th>
-                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Thành tiền
-                </th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Kho
-                </th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">STT</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mã sản phẩm</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tên sản phẩm</th>
+                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Số lượng</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ĐVT</th>
+                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Đơn giá</th>
+                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Thành tiền</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kho</th>
               </tr>
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
               <tr v-for="(item, index) in entry.items" :key="index" class="hover:bg-gray-50">
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {{ index + 1 }}
-                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ index + 1 }}</td>
                 <td class="px-6 py-4 whitespace-nowrap">
                   <span class="text-sm font-medium text-primary">{{ item.item_code }}</span>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {{ item.item_name }}
-                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ item.item_name }}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right font-medium">
                   {{ formatNumber(item.qty) }}
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {{ translateUOM(item.uom) }}
-                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ translateUOM(item.uom) }}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
                   {{ formatNumber(item.basic_rate || item.valuation_rate || 0) }}
                 </td>
@@ -208,22 +190,139 @@
             </tbody>
             <tfoot class="bg-gray-50">
               <tr>
-                <td colspan="3" class="px-6 py-4 text-sm font-medium text-gray-900">
-                  Tổng cộng
-                </td>
-                <td class="px-6 py-4 text-sm font-bold text-gray-900 text-right">
-                  {{ formatNumber(totalQty) }}
-                </td>
-                <td colspan="2"></td>
-                <td class="px-6 py-4 text-sm font-bold text-primary text-right">
-                  {{ formatNumber(getTotalValue(entry)) }}
-                </td>
+                <td colspan="6" class="px-6 py-4 text-sm font-medium text-gray-900">Tổng cộng</td>
+                <td class="px-6 py-4 text-sm font-bold text-primary text-right">{{ formatNumber(getTotalValue(entry)) }}</td>
                 <td></td>
               </tr>
             </tfoot>
           </table>
         </div>
       </div>
+
+      <!-- Transfer type view - Show source and target -->
+      <template v-else>
+        <!-- Xuất kho (Source) -->
+        <div v-if="sourceItems.length > 0" class="bg-white rounded-lg shadow">
+          <div class="px-6 py-4 border-b border-gray-200 flex items-center gap-3">
+            <div class="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+            </div>
+            <div>
+              <h3 class="text-lg font-semibold text-gray-900">Xuất kho</h3>
+              <p class="text-sm text-gray-500">Nguyên vật liệu tiêu hao / chuyển đi</p>
+            </div>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+              <thead class="bg-orange-50">
+                <tr>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-orange-700 uppercase tracking-wider">STT</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-orange-700 uppercase tracking-wider">Mã SP</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-orange-700 uppercase tracking-wider">Tên sản phẩm</th>
+                  <th class="px-6 py-3 text-right text-xs font-medium text-orange-700 uppercase tracking-wider">Số lượng</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-orange-700 uppercase tracking-wider">ĐVT</th>
+                  <th class="px-6 py-3 text-right text-xs font-medium text-orange-700 uppercase tracking-wider">Đơn giá</th>
+                  <th class="px-6 py-3 text-right text-xs font-medium text-orange-700 uppercase tracking-wider">Thành tiền</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-orange-700 uppercase tracking-wider">Kho xuất</th>
+                </tr>
+              </thead>
+              <tbody class="bg-white divide-y divide-gray-200">
+                <tr v-for="(item, index) in sourceItems" :key="'s-'+index" class="hover:bg-orange-50/30">
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ index + 1 }}</td>
+                  <td class="px-6 py-4 whitespace-nowrap">
+                    <span class="text-sm font-medium text-primary">{{ item.item_code }}</span>
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ item.item_name }}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-orange-600">
+                    -{{ formatNumber(item.qty) }}
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ translateUOM(item.uom) }}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
+                    {{ formatNumber(item.basic_rate || item.valuation_rate || 0) }}
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-orange-600">
+                    {{ formatNumber(item.amount || 0) }}
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {{ formatWarehouse(item.s_warehouse) }}
+                  </td>
+                </tr>
+              </tbody>
+              <tfoot class="bg-orange-50">
+                <tr>
+                  <td colspan="6" class="px-6 py-3 text-sm font-medium text-gray-900">Tổng xuất kho</td>
+                  <td class="px-6 py-3 text-sm font-bold text-orange-600 text-right">{{ formatNumber(sourceTotal) }}</td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+
+        <!-- Nhập kho (Target) -->
+        <div v-if="targetItems.length > 0" class="bg-white rounded-lg shadow">
+          <div class="px-6 py-4 border-b border-gray-200 flex items-center gap-3">
+            <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+              </svg>
+            </div>
+            <div>
+              <h3 class="text-lg font-semibold text-gray-900">Nhập kho</h3>
+              <p class="text-sm text-gray-500">
+                {{ entry.stock_entry_type === 'Manufacture' ? 'Thành phẩm hoàn thành' : 'Sản phẩm nhận về' }}
+              </p>
+            </div>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+              <thead class="bg-blue-50">
+                <tr>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider">STT</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider">Mã SP</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider">Tên sản phẩm</th>
+                  <th class="px-6 py-3 text-right text-xs font-medium text-blue-700 uppercase tracking-wider">Số lượng</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider">ĐVT</th>
+                  <th class="px-6 py-3 text-right text-xs font-medium text-blue-700 uppercase tracking-wider">Đơn giá</th>
+                  <th class="px-6 py-3 text-right text-xs font-medium text-blue-700 uppercase tracking-wider">Thành tiền</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-blue-700 uppercase tracking-wider">Kho nhập</th>
+                </tr>
+              </thead>
+              <tbody class="bg-white divide-y divide-gray-200">
+                <tr v-for="(item, index) in targetItems" :key="'t-'+index" class="hover:bg-blue-50/30">
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ index + 1 }}</td>
+                  <td class="px-6 py-4 whitespace-nowrap">
+                    <span class="text-sm font-medium text-primary">{{ item.item_code }}</span>
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ item.item_name }}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-blue-600">
+                    +{{ formatNumber(item.qty) }}
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ translateUOM(item.uom) }}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
+                    {{ formatNumber(item.basic_rate || item.valuation_rate || 0) }}
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-blue-600">
+                    {{ formatNumber(item.amount || 0) }}
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {{ formatWarehouse(item.t_warehouse) }}
+                  </td>
+                </tr>
+              </tbody>
+              <tfoot class="bg-blue-50">
+                <tr>
+                  <td colspan="6" class="px-6 py-3 text-sm font-medium text-gray-900">Tổng nhập kho</td>
+                  <td class="px-6 py-3 text-sm font-bold text-blue-600 text-right">{{ formatNumber(targetTotal) }}</td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      </template>
     </template>
   </div>
 </template>
@@ -242,34 +341,49 @@ const entry = ref(null)
 
 // UOM Translation
 const UOM_TRANSLATIONS = {
-  'Nos': 'Cái',
-  'nos': 'Cái',
-  'Unit': 'Cái',
-  'unit': 'Cái',
-  'Kg': 'Kg',
-  'kg': 'Kg',
-  'Kilogram': 'Kg',
-  'Meter': 'Mét',
-  'meter': 'Mét',
-  'm': 'Mét',
-  'Piece': 'Cái',
-  'piece': 'Cái',
-  'Pcs': 'Cái',
-  'pcs': 'Cái',
-  'Set': 'Bộ',
-  'set': 'Bộ',
-  'Box': 'Hộp',
-  'box': 'Hộp',
-  'Roll': 'Cuộn',
-  'roll': 'Cuộn',
-  'Liter': 'Lít',
-  'liter': 'Lít',
+  'Nos': 'Cái', 'nos': 'Cái', 'Unit': 'Cái', 'unit': 'Cái',
+  'Kg': 'Kg', 'kg': 'Kg', 'Kilogram': 'Kg',
+  'Meter': 'Mét', 'meter': 'Mét', 'm': 'Mét',
+  'Piece': 'Cái', 'piece': 'Cái', 'Pcs': 'Cái', 'pcs': 'Cái',
+  'Set': 'Bộ', 'set': 'Bộ',
+  'Box': 'Hộp', 'box': 'Hộp',
+  'Roll': 'Cuộn', 'roll': 'Cuộn',
+  'Liter': 'Lít', 'liter': 'Lít',
 }
 
-// Computed
-const totalQty = computed(() => {
-  if (!entry.value?.items) return 0
-  return entry.value.items.reduce((sum, item) => sum + (item.qty || 0), 0)
+// Computed - Check if this is a transfer type (has both source and target)
+const isTransferType = computed(() => {
+  if (!entry.value) return false
+  const type = entry.value.stock_entry_type
+  return ['Material Transfer', 'Material Transfer for Manufacture', 'Manufacture', 'Repack', 'Disassemble'].includes(type)
+})
+
+// Computed - Items with source warehouse (xuất kho)
+const sourceItems = computed(() => {
+  if (!entry.value?.items) return []
+  return entry.value.items.filter(item => item.s_warehouse && !item.is_finished_item)
+})
+
+// Computed - Items with target warehouse (nhập kho) - finished goods or transferred items
+const targetItems = computed(() => {
+  if (!entry.value?.items) return []
+  // For Manufacture: items going to FG warehouse or is_finished_item
+  // For Transfer: items with t_warehouse
+  return entry.value.items.filter(item => {
+    if (entry.value.stock_entry_type === 'Manufacture') {
+      return item.is_finished_item || (item.t_warehouse && !item.s_warehouse)
+    }
+    return item.t_warehouse && !sourceItems.value.includes(item)
+  })
+})
+
+// Computed - Total values
+const sourceTotal = computed(() => {
+  return sourceItems.value.reduce((sum, item) => sum + (item.amount || 0), 0)
+})
+
+const targetTotal = computed(() => {
+  return targetItems.value.reduce((sum, item) => sum + (item.amount || 0), 0)
 })
 
 // Methods
@@ -283,8 +397,12 @@ const getEntryTypeLabel = (type) => {
     'Material Receipt': 'Phiếu nhập kho',
     'Material Issue': 'Phiếu xuất kho',
     'Material Transfer': 'Phiếu chuyển kho',
+    'Material Transfer for Manufacture': 'Phiếu cấp phát NVL',
     'Manufacture': 'Phiếu sản xuất',
-    'Repack': 'Phiếu đóng gói'
+    'Repack': 'Phiếu đóng gói',
+    'Disassemble': 'Phiếu tháo gỡ',
+    'Send to Subcontractor': 'Phiếu gửi gia công',
+    'Material Consumption for Manufacture': 'Phiếu tiêu hao NVL',
   }
   return labels[type] || type
 }
@@ -334,7 +452,6 @@ const getStatusText = (docstatus) => {
 }
 
 const printEntry = () => {
-  // Open ERPNext print view
   const printUrl = `/printview?doctype=Stock%20Entry&name=${entry.value.name}&format=Standard`
   window.open(printUrl, '_blank')
 }

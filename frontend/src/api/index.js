@@ -243,27 +243,92 @@ export const stockAPI = {
 export const workOrderAPI = {
   /**
    * Get list of work orders
+   * @param {Object} params - { status, docstatus, limit, page }
    */
-  getList: (status = null, limit = 20) => 
-    api.post('/method/xuanhoa_app.api.get_work_orders', { status, limit }),
+  getList: async (params = {}) => {
+    const res = await api.post('/method/xuanhoa_app.api.get_work_orders', params)
+    return res.data.message
+  },
 
   /**
    * Get work order detail
    */
-  getDetail: (name) => 
-    api.post('/method/xuanhoa_app.api.get_work_order_detail', { work_order_name: name }),
+  getDetail: async (name) => {
+    const res = await api.post('/method/xuanhoa_app.api.get_work_order_detail', { work_order_name: name })
+    return res.data.message
+  },
 
   /**
-   * Start work order (transfer materials)
+   * Get list of BOMs for selection
+   * @param {string|null} itemCode - Filter by item
+   * @param {boolean} isActive - Only active BOMs
+   * @param {boolean} isDefault - Only default BOMs
    */
-  start: (name) => 
-    api.post('/method/xuanhoa_app.api.start_work_order', { work_order_name: name }),
+  getBOMs: async (itemCode = null, isActive = true, isDefault = false) => {
+    const res = await api.post('/method/xuanhoa_app.api.get_boms', { 
+      item_code: itemCode,
+      is_active: isActive ? 1 : 0,
+      is_default: isDefault ? 1 : 0
+    })
+    return res.data.message
+  },
 
   /**
-   * Complete work order (manufacture)
+   * Get BOM detail with items
    */
-  complete: (name, qty) => 
-    api.post('/method/xuanhoa_app.api.complete_work_order', { work_order_name: name, qty })
+  getBOMDetail: async (bomNo) => {
+    const res = await api.post('/method/xuanhoa_app.api.get_bom_detail', { bom_no: bomNo })
+    return res.data.message
+  },
+
+  /**
+   * Create new work order (Draft)
+   * @param {Object} data - { bom_no, qty, planned_start_date, expected_delivery_date, source_warehouse, wip_warehouse, fg_warehouse }
+   */
+  create: async (data) => {
+    const res = await api.post('/method/xuanhoa_app.api.create_work_order', data)
+    return res.data.message
+  },
+
+  /**
+   * Submit/Approve work order (Draft -> Submitted)
+   */
+  submit: async (name) => {
+    const res = await api.post('/method/xuanhoa_app.api.submit_work_order', { work_order_name: name })
+    return res.data.message
+  },
+
+  /**
+   * Start work order (transfer materials to WIP)
+   */
+  start: async (name) => {
+    const res = await api.post('/method/xuanhoa_app.api.start_work_order', { work_order_name: name })
+    return res.data.message
+  },
+
+  /**
+   * Complete work order (manufacture finished goods)
+   */
+  complete: async (name, qty) => {
+    const res = await api.post('/method/xuanhoa_app.api.complete_work_order', { work_order_name: name, qty })
+    return res.data.message
+  },
+
+  /**
+   * Stop work order
+   */
+  stop: async (name) => {
+    const res = await api.post('/method/xuanhoa_app.api.stop_work_order', { work_order_name: name })
+    return res.data.message
+  },
+
+  /**
+   * Cancel work order (only if not started)
+   */
+  cancel: async (name) => {
+    const res = await api.post('/method/xuanhoa_app.api.cancel_work_order', { work_order_name: name })
+    return res.data.message
+  }
 }
 
 // ==================== DASHBOARD APIs ====================

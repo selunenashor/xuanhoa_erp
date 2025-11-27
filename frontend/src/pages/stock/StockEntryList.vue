@@ -37,11 +37,12 @@
             class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
           >
             <option value="">Tất cả loại</option>
-            <option value="Material Receipt">Nhập kho</option>
-            <option value="Material Issue">Xuất kho</option>
-            <option value="Material Transfer">Chuyển kho</option>
-            <option value="Manufacture">Sản xuất</option>
-            <option value="Repack">Đóng gói lại</option>
+            <option value="Material Receipt">Phiếu nhập kho</option>
+            <option value="Material Issue">Phiếu xuất kho</option>
+            <option value="Material Transfer">Phiếu chuyển kho</option>
+            <option value="Material Transfer for Manufacture">Phiếu cấp phát NVL</option>
+            <option value="Manufacture">Phiếu sản xuất</option>
+            <option value="Repack">Phiếu đóng gói</option>
           </select>
         </div>
 
@@ -382,8 +383,12 @@ const getEntryTypeLabel = (type) => {
     'Material Receipt': 'Nhập kho',
     'Material Issue': 'Xuất kho',
     'Material Transfer': 'Chuyển kho',
+    'Material Transfer for Manufacture': 'Cấp phát NVL',
     'Manufacture': 'Sản xuất',
-    'Repack': 'Đóng gói'
+    'Repack': 'Đóng gói',
+    'Disassemble': 'Tháo gỡ',
+    'Send to Subcontractor': 'Gửi gia công',
+    'Material Consumption for Manufacture': 'Tiêu hao NVL'
   }
   return labels[type] || type
 }
@@ -393,8 +398,12 @@ const getEntryTypeClass = (type) => {
     'Material Receipt': 'bg-blue-100 text-blue-700',
     'Material Issue': 'bg-orange-100 text-orange-700',
     'Material Transfer': 'bg-purple-100 text-purple-700',
+    'Material Transfer for Manufacture': 'bg-indigo-100 text-indigo-700',
     'Manufacture': 'bg-teal-100 text-teal-700',
-    'Repack': 'bg-gray-100 text-gray-700'
+    'Repack': 'bg-gray-100 text-gray-700',
+    'Disassemble': 'bg-red-100 text-red-700',
+    'Send to Subcontractor': 'bg-yellow-100 text-yellow-700',
+    'Material Consumption for Manufacture': 'bg-pink-100 text-pink-700'
   }
   return classes[type] || 'bg-gray-100 text-gray-700'
 }

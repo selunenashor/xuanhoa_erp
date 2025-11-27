@@ -122,7 +122,6 @@ const UOM_TRANSLATIONS = {
   'Kilogram': 'Kg',
   'Meter': 'Mét',
   'meter': 'Mét',
-  'm': 'Mét',
   'Piece': 'Cái',
   'piece': 'Cái',
   'Pcs': 'Cái',
@@ -137,8 +136,6 @@ const UOM_TRANSLATIONS = {
   'roll': 'Cuộn',
   'Liter': 'Lít',
   'liter': 'Lít',
-  'L': 'Lít',
-  'l': 'Lít',
 }
 
 // Translate UOM in text
@@ -146,9 +143,10 @@ const translateUOMInText = (text) => {
   if (!text) return text
   let result = text
   for (const [eng, viet] of Object.entries(UOM_TRANSLATIONS)) {
-    // Replace whole word only (e.g., "10 Nos" -> "10 Cái")
-    const regex = new RegExp(`\\b${eng}\\b`, 'g')
-    result = result.replace(regex, viet)
+    // Replace whole word only, case-sensitive
+    // Use word boundary to avoid partial matches
+    const regex = new RegExp(`(\\d+\\.?\\d*)\\s*${eng}\\b`, 'g')
+    result = result.replace(regex, `$1 ${viet}`)
   }
   return result
 }

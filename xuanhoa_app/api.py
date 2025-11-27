@@ -385,42 +385,97 @@ def create_material_issue(items=None, posting_date=None, remarks=None, item_code
 # ============================================
 
 @frappe.whitelist()
-def get_work_orders(status=None, limit=20):
+def get_work_orders(status=None, docstatus=None, limit=50, page=1):
     """
-    Lấy danh sách Work Order cho dashboard
+    Lấy danh sách Work Order với filter và phân trang
     
     Args:
-        status: Lọc theo trạng thái (Not Started, In Process, Completed, Stopped)
-        limit: Số lượng kết quả tối đa
+        status: Lọc theo trạng thái (Draft, Not Started, In Process, Completed, Stopped)
+        docstatus: Lọc theo trạng thái duyệt (0=Draft, 1=Submitted)
+        limit: Số lượng kết quả mỗi trang
+        page: Số trang (bắt đầu từ 1)
     
     Returns:
-        list: Danh sách Work Order với các thông tin cơ bản
+        dict: {data: list, total: int, page: int, total_pages: int}
     """
-    filters = {"docstatus": 1}  # Chỉ lấy submitted
+    filters = {}
+    
+    # Lọc theo docstatus
+    if docstatus is not None:
+        filters["docstatus"] = int(docstatus)
+    
+    # Lọc theo status
     if status:
-        filters["status"] = status
+        if status == "Draft":
+            filters["docstatus"] = 0
+        else:
+            filters["status"] = status
+            if "docstatus" not in filters:
+                filters["docstatus"] = 1  # Submitted by default for non-draft
+    
+    # Pagination
+    limit = int(limit)
+    page = int(page)
+    offset = (page - 1) * limit
+    
+    # Count total
+    total_count = frappe.db.count("Work Order", filters=filters)
     
     orders = frappe.get_all(
         "Work Order",
         filters=filters,
         fields=[
             "name", "production_item", "item_name", 
-            "qty", "produced_qty", "status",
+            "qty", "produced_qty", "status", "docstatus",
             "planned_start_date", "expected_delivery_date",
-            "wip_warehouse", "fg_warehouse"
+            "wip_warehouse", "fg_warehouse", "source_warehouse",
+            "bom_no", "creation", "modified", "owner"
         ],
         order_by="modified desc",
-        limit=int(limit)
+        limit_start=offset,
+        limit_page_length=limit
     )
     
-    # Tính phần trăm hoàn thành
+    # Enhance data
     for order in orders:
+        # Tính phần trăm hoàn thành
         if order.qty > 0:
             order["progress"] = round((order.produced_qty / order.qty) * 100, 1)
         else:
             order["progress"] = 0
+        
+        # Lấy tên người tạo
+        order["owner_name"] = frappe.db.get_value("User", order.owner, "full_name") or order.owner
+        
+        # Thêm status display
+        if order.docstatus == 0:
+            order["status_display"] = "Chờ duyệt"
+            order["status_color"] = "warning"
+        elif order.status == "Not Started":
+            order["status_display"] = "Chưa bắt đầu"
+            order["status_color"] = "info"
+        elif order.status == "In Process":
+            order["status_display"] = "Đang sản xuất"
+            order["status_color"] = "primary"
+        elif order.status == "Completed":
+            order["status_display"] = "Hoàn thành"
+            order["status_color"] = "success"
+        elif order.status == "Stopped":
+            order["status_display"] = "Đã dừng"
+            order["status_color"] = "error"
+        else:
+            order["status_display"] = order.status
+            order["status_color"] = "gray"
     
-    return orders
+    total_pages = (total_count + limit - 1) // limit if limit > 0 else 1
+    
+    return {
+        "data": orders,
+        "total": total_count,
+        "page": page,
+        "page_size": limit,
+        "total_pages": total_pages
+    }
 
 
 @frappe.whitelist()
@@ -434,37 +489,323 @@ def get_work_order_detail(work_order_name):
     Returns:
         dict: Thông tin chi tiết Work Order
     """
+    if not frappe.db.exists("Work Order", work_order_name):
+        return {"success": False, "message": _("Không tìm thấy lệnh sản xuất {0}").format(work_order_name)}
+    
     doc = frappe.get_doc("Work Order", work_order_name)
     
     # Lấy thông tin nguyên liệu
     required_items = []
     for item in doc.required_items:
+        # Lấy tồn kho hiện tại
+        actual_qty = frappe.db.get_value("Bin", {
+            "item_code": item.item_code,
+            "warehouse": item.source_warehouse
+        }, "actual_qty") or 0
+        
         required_items.append({
             "item_code": item.item_code,
             "item_name": item.item_name,
             "required_qty": item.required_qty,
-            "transferred_qty": item.transferred_qty,
-            "consumed_qty": item.consumed_qty,
-            "available_qty_at_source": item.available_qty_at_source_warehouse,
-            "source_warehouse": item.source_warehouse
+            "transferred_qty": item.transferred_qty or 0,
+            "consumed_qty": item.consumed_qty or 0,
+            "available_qty": actual_qty,  # Tồn kho tại kho nguồn
+            "available_qty_at_source": actual_qty,  # Alias for backward compatibility
+            "source_warehouse": item.source_warehouse,
+            "uom": frappe.db.get_value("Item", item.item_code, "stock_uom") or "Nos"
         })
     
+    # Lấy tên người tạo/duyệt
+    owner_name = frappe.db.get_value("User", doc.owner, "full_name") or doc.owner
+    
+    # Lấy Stock Entries liên quan
+    stock_entries = frappe.get_all(
+        "Stock Entry",
+        filters={"work_order": work_order_name, "docstatus": 1},
+        fields=["name", "purpose", "posting_date", "fg_completed_qty", "creation"],
+        order_by="creation desc"
+    )
+    
+    # Status display
+    if doc.docstatus == 0:
+        status_display = "Chờ duyệt"
+        status_color = "warning"
+    elif doc.status == "Not Started":
+        status_display = "Chưa bắt đầu"
+        status_color = "info"
+    elif doc.status == "In Process":
+        status_display = "Đang sản xuất"
+        status_color = "primary"
+    elif doc.status == "Completed":
+        status_display = "Hoàn thành"
+        status_color = "success"
+    elif doc.status == "Stopped":
+        status_display = "Đã dừng"
+        status_color = "error"
+    else:
+        status_display = doc.status
+        status_color = "gray"
+    
     return {
+        "success": True,
         "name": doc.name,
         "production_item": doc.production_item,
         "item_name": doc.item_name,
         "qty": doc.qty,
         "produced_qty": doc.produced_qty,
         "status": doc.status,
+        "docstatus": doc.docstatus,
+        "status_display": status_display,
+        "status_color": status_color,
         "bom_no": doc.bom_no,
         "wip_warehouse": doc.wip_warehouse,
         "fg_warehouse": doc.fg_warehouse,
         "source_warehouse": doc.source_warehouse,
-        "planned_start_date": doc.planned_start_date,
-        "expected_delivery_date": doc.expected_delivery_date,
+        "planned_start_date": str(doc.planned_start_date) if doc.planned_start_date else None,
+        "expected_delivery_date": str(doc.expected_delivery_date) if doc.expected_delivery_date else None,
         "required_items": required_items,
-        "progress": round((doc.produced_qty / doc.qty) * 100, 1) if doc.qty > 0 else 0
+        "stock_entries": stock_entries,
+        "progress": round((doc.produced_qty / doc.qty) * 100, 1) if doc.qty > 0 else 0,
+        "owner": doc.owner,
+        "owner_name": owner_name,
+        "creation": str(doc.creation),
+        "modified": str(doc.modified)
     }
+
+
+@frappe.whitelist()
+def get_boms(item_code=None, is_active=1, is_default=None):
+    """
+    Lấy danh sách BOM để chọn khi tạo Work Order
+    
+    Args:
+        item_code: Lọc theo sản phẩm (tùy chọn)
+        is_active: Chỉ lấy BOM đang hoạt động (mặc định = 1)
+        is_default: Chỉ lấy BOM mặc định (tùy chọn)
+    
+    Returns:
+        list: Danh sách BOM
+    """
+    filters = {"docstatus": 1}
+    
+    if is_active is not None:
+        filters["is_active"] = int(is_active)
+    
+    if is_default is not None:
+        filters["is_default"] = int(is_default)
+    
+    if item_code:
+        filters["item"] = item_code
+    
+    boms = frappe.get_all(
+        "BOM",
+        filters=filters,
+        fields=[
+            "name", "item", "item_name", "quantity", 
+            "is_active", "is_default", "total_cost",
+            "company", "currency"
+        ],
+        order_by="is_default desc, modified desc"
+    )
+    
+    # Thêm thông tin bổ sung
+    for bom in boms:
+        # Đếm số nguyên liệu
+        bom["item_count"] = frappe.db.count("BOM Item", {"parent": bom.name})
+        
+        # Lấy stock_uom của sản phẩm
+        bom["uom"] = frappe.db.get_value("Item", bom.item, "stock_uom") or "Nos"
+    
+    return boms
+
+
+@frappe.whitelist()
+def get_bom_detail(bom_no):
+    """
+    Lấy chi tiết BOM bao gồm danh sách nguyên liệu
+    
+    Args:
+        bom_no: Mã BOM
+    
+    Returns:
+        dict: Chi tiết BOM
+    """
+    if not frappe.db.exists("BOM", bom_no):
+        return {"success": False, "message": _("Không tìm thấy BOM {0}").format(bom_no)}
+    
+    doc = frappe.get_doc("BOM", bom_no)
+    
+    items = []
+    for item in doc.items:
+        items.append({
+            "item_code": item.item_code,
+            "item_name": item.item_name,
+            "qty": item.qty,
+            "uom": item.uom,
+            "rate": item.rate,
+            "amount": item.amount,
+            "source_warehouse": item.source_warehouse
+        })
+    
+    return {
+        "success": True,
+        "name": doc.name,
+        "item": doc.item,
+        "item_name": doc.item_name,
+        "quantity": doc.quantity,
+        "is_active": doc.is_active,
+        "is_default": doc.is_default,
+        "total_cost": doc.total_cost,
+        "items": items,
+        "uom": frappe.db.get_value("Item", doc.item, "stock_uom") or "Nos"
+    }
+
+
+@frappe.whitelist()
+def create_work_order(bom_no, qty, planned_start_date=None, expected_delivery_date=None, 
+                      source_warehouse=None, wip_warehouse=None, fg_warehouse=None):
+    """
+    Tạo Work Order mới (Draft - chờ duyệt)
+    
+    Args:
+        bom_no: Mã BOM
+        qty: Số lượng cần sản xuất
+        planned_start_date: Ngày bắt đầu dự kiến
+        expected_delivery_date: Ngày hoàn thành dự kiến
+        source_warehouse: Kho nguồn nguyên liệu
+        wip_warehouse: Kho sản xuất dở dang
+        fg_warehouse: Kho thành phẩm
+    
+    Returns:
+        dict: {success: bool, name: str, message: str}
+    """
+    try:
+        # Validate BOM
+        if not frappe.db.exists("BOM", bom_no):
+            return {"success": False, "message": _("Định mức sản xuất (BOM) không tồn tại. Vui lòng chọn BOM khác.")}
+        
+        bom = frappe.get_doc("BOM", bom_no)
+        
+        if not bom.is_active:
+            return {"success": False, "message": _("Định mức sản xuất (BOM) đã ngừng sử dụng. Vui lòng chọn BOM đang hoạt động.")}
+        
+        company = frappe.defaults.get_user_default("Company") or frappe.db.get_single_value("Global Defaults", "default_company")
+        
+        if not company:
+            return {"success": False, "message": _("Chưa thiết lập công ty mặc định. Vui lòng liên hệ quản trị viên.")}
+        
+        # Validate qty
+        if not qty or float(qty) <= 0:
+            return {"success": False, "message": _("Số lượng sản xuất phải lớn hơn 0.")}
+        
+        # Tạo Work Order
+        doc = frappe.new_doc("Work Order")
+        doc.production_item = bom.item
+        doc.bom_no = bom_no
+        doc.qty = float(qty)
+        doc.company = company
+        
+        if planned_start_date:
+            doc.planned_start_date = planned_start_date
+        
+        if expected_delivery_date:
+            doc.expected_delivery_date = expected_delivery_date
+        
+        # Warehouse settings
+        if source_warehouse:
+            doc.source_warehouse = source_warehouse
+        if wip_warehouse:
+            doc.wip_warehouse = wip_warehouse
+        if fg_warehouse:
+            doc.fg_warehouse = fg_warehouse
+        
+        doc.insert()
+        
+        return {
+            "success": True,
+            "name": doc.name,
+            "message": _("Đã tạo lệnh sản xuất {0} - Đang chờ duyệt").format(doc.name)
+        }
+    except frappe.exceptions.ValidationError as e:
+        return {
+            "success": False,
+            "message": _("Dữ liệu không hợp lệ: {0}").format(str(e))
+        }
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "create_work_order Error")
+        error_msg = str(e)
+        # Parse common errors
+        if "company" in error_msg.lower():
+            error_msg = _("Chưa thiết lập công ty. Vui lòng liên hệ quản trị viên.")
+        elif "warehouse" in error_msg.lower():
+            error_msg = _("Thiết lập kho không hợp lệ. Vui lòng kiểm tra lại cấu hình kho.")
+        elif "bom" in error_msg.lower():
+            error_msg = _("Định mức sản xuất (BOM) không hợp lệ.")
+        return {
+            "success": False,
+            "message": error_msg
+        }
+
+
+# Helper function để parse lỗi thân thiện
+def _parse_friendly_error(error_msg):
+    """Parse error message thành thông báo thân thiện với người dùng"""
+    error_lower = error_msg.lower()
+    
+    if "company" in error_lower:
+        return _("Chưa thiết lập công ty. Vui lòng liên hệ quản trị viên.")
+    elif "warehouse" in error_lower and "not found" in error_lower:
+        return _("Kho không tồn tại. Vui lòng kiểm tra lại cấu hình kho.")
+    elif "insufficient" in error_lower or "not enough" in error_lower:
+        return _("Không đủ tồn kho nguyên vật liệu.")
+    elif "permission" in error_lower or "not permitted" in error_lower:
+        return _("Bạn không có quyền thực hiện thao tác này.")
+    elif "already submitted" in error_lower:
+        return _("Lệnh sản xuất đã được duyệt trước đó.")
+    elif "cancelled" in error_lower:
+        return _("Lệnh sản xuất đã bị hủy.")
+    elif "bom" in error_lower:
+        return _("Định mức sản xuất (BOM) không hợp lệ.")
+    elif "item" in error_lower and "not found" in error_lower:
+        return _("Sản phẩm không tồn tại trong hệ thống.")
+    else:
+        return error_msg
+
+
+@frappe.whitelist()
+def submit_work_order(work_order_name):
+    """
+    Duyệt Work Order (Draft -> Submitted)
+    
+    Args:
+        work_order_name: Mã Work Order
+    
+    Returns:
+        dict: {success: bool, message: str}
+    """
+    try:
+        if not frappe.db.exists("Work Order", work_order_name):
+            return {"success": False, "message": _("Không tìm thấy lệnh sản xuất. Có thể đã bị xóa.")}
+        
+        doc = frappe.get_doc("Work Order", work_order_name)
+        
+        if doc.docstatus == 1:
+            return {"success": False, "message": _("Lệnh sản xuất này đã được duyệt trước đó.")}
+        elif doc.docstatus == 2:
+            return {"success": False, "message": _("Lệnh sản xuất này đã bị hủy, không thể duyệt.")}
+        
+        doc.submit()
+        
+        return {
+            "success": True,
+            "message": _("Đã duyệt lệnh sản xuất {0}").format(work_order_name)
+        }
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "submit_work_order Error")
+        return {
+            "success": False,
+            "message": _parse_friendly_error(str(e))
+        }
 
 
 @frappe.whitelist()
@@ -477,29 +818,82 @@ def start_work_order(work_order_name):
     try:
         from erpnext.manufacturing.doctype.work_order.work_order import make_stock_entry
         
+        if not frappe.db.exists("Work Order", work_order_name):
+            return {"success": False, "message": _("Không tìm thấy lệnh sản xuất. Có thể đã bị xóa.")}
+        
         work_order = frappe.get_doc("Work Order", work_order_name)
         
-        if work_order.status not in ["Not Started", "In Process"]:
+        if work_order.docstatus != 1:
             return {
                 "success": False,
-                "message": _("Không thể bắt đầu Work Order với trạng thái {0}").format(work_order.status)
+                "message": _("Lệnh sản xuất chưa được duyệt. Vui lòng duyệt trước khi cấp phát nguyên liệu.")
+            }
+        
+        status_map = {
+            "Completed": "đã hoàn thành",
+            "Stopped": "đã dừng"
+        }
+        if work_order.status in status_map:
+            return {
+                "success": False,
+                "message": _("Không thể cấp phát NVL vì lệnh sản xuất {0}.").format(status_map[work_order.status])
+            }
+        
+        # Kiểm tra tồn kho trước khi cấp phát
+        insufficient_items = []
+        source_warehouse = work_order.source_warehouse
+        
+        for item in work_order.required_items:
+            required_qty = item.required_qty - item.transferred_qty
+            if required_qty <= 0:
+                continue
+                
+            # Lấy tồn kho từ source warehouse
+            available_qty = frappe.db.get_value("Bin", 
+                {"item_code": item.item_code, "warehouse": source_warehouse},
+                "actual_qty"
+            ) or 0
+            
+            if available_qty < required_qty:
+                item_name = frappe.db.get_value("Item", item.item_code, "item_name") or item.item_code
+                insufficient_items.append({
+                    "item_code": item.item_code,
+                    "item_name": item_name,
+                    "required": required_qty,
+                    "available": available_qty,
+                    "shortage": required_qty - available_qty
+                })
+        
+        if insufficient_items:
+            # Tạo thông báo lỗi chi tiết
+            error_lines = [_("Không đủ nguyên vật liệu trong kho:")]
+            for item in insufficient_items:
+                error_lines.append(
+                    f"• {item['item_name']} ({item['item_code']}): Cần {item['required']}, Có {item['available']}, Thiếu {item['shortage']}"
+                )
+            return {
+                "success": False,
+                "message": "\n".join(error_lines),
+                "insufficient_items": insufficient_items
             }
         
         # Tạo Stock Entry loại "Material Transfer for Manufacture"
-        stock_entry = make_stock_entry(work_order_name, "Material Transfer for Manufacture", work_order.qty)
+        # make_stock_entry returns a dict, so we need to create a doc from it
+        stock_entry_dict = make_stock_entry(work_order_name, "Material Transfer for Manufacture", work_order.qty)
+        stock_entry = frappe.get_doc(stock_entry_dict)
         stock_entry.insert()
         stock_entry.submit()
         
         return {
             "success": True,
             "stock_entry": stock_entry.name,
-            "message": _("Đã cấp phát vật tư cho Work Order {0}").format(work_order_name)
+            "message": _("Đã cấp phát nguyên vật liệu và bắt đầu sản xuất.")
         }
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), "start_work_order Error")
         return {
             "success": False,
-            "message": str(e)
+            "message": _parse_friendly_error(str(e))
         }
 
 
@@ -513,18 +907,54 @@ def complete_work_order(work_order_name, qty):
     try:
         from erpnext.manufacturing.doctype.work_order.work_order import make_stock_entry
         
+        if not frappe.db.exists("Work Order", work_order_name):
+            return {"success": False, "message": _("Không tìm thấy lệnh sản xuất. Có thể đã bị xóa.")}
+        
         work_order = frappe.get_doc("Work Order", work_order_name)
+        
+        if work_order.docstatus != 1:
+            return {
+                "success": False,
+                "message": _("Lệnh sản xuất chưa được duyệt. Không thể ghi nhận hoàn thành.")
+            }
+        
+        if work_order.status == "Completed":
+            return {
+                "success": False,
+                "message": _("Lệnh sản xuất đã hoàn thành trước đó.")
+            }
+        
+        if work_order.status == "Stopped":
+            return {
+                "success": False,
+                "message": _("Lệnh sản xuất đã dừng. Không thể ghi nhận hoàn thành.")
+            }
         
         # Kiểm tra số lượng hợp lệ
         remaining = work_order.qty - work_order.produced_qty
+        
+        if remaining <= 0:
+            return {
+                "success": False,
+                "message": _("Lệnh sản xuất đã hoàn thành đủ số lượng.")
+            }
+        
+        if float(qty) <= 0:
+            return {
+                "success": False,
+                "message": _("Số lượng hoàn thành phải lớn hơn 0.")
+            }
+        
         if float(qty) > remaining:
             return {
                 "success": False,
-                "message": _("Số lượng vượt quá ({0} > {1})").format(qty, remaining)
+                "message": _("Số lượng hoàn thành ({0}) vượt quá số lượng còn lại ({1}).").format(int(qty), int(remaining))
             }
         
         # Tạo Stock Entry loại "Manufacture"
-        stock_entry = make_stock_entry(work_order_name, "Manufacture", float(qty))
+        # make_stock_entry returns a dict, so we need to create a doc from it
+        stock_entry_dict = make_stock_entry(work_order_name, "Manufacture", float(qty))
+        stock_entry = frappe.get_doc(stock_entry_dict)
         stock_entry.insert()
         stock_entry.submit()
         
@@ -532,13 +962,135 @@ def complete_work_order(work_order_name, qty):
             "success": True,
             "stock_entry": stock_entry.name,
             "produced_qty": qty,
-            "message": _("Đã hoàn thành sản xuất {0} sản phẩm").format(qty)
+            "message": _("Đã ghi nhận hoàn thành {0} sản phẩm.").format(int(qty))
         }
     except Exception as e:
         frappe.log_error(frappe.get_traceback(), "complete_work_order Error")
         return {
             "success": False,
-            "message": str(e)
+            "message": _parse_friendly_error(str(e))
+        }
+
+
+@frappe.whitelist()
+def stop_work_order(work_order_name):
+    """
+    Dừng lệnh sản xuất
+    
+    Args:
+        work_order_name: Tên Work Order
+    
+    Returns:
+        dict: {success: bool, message: str}
+    """
+    try:
+        if not frappe.db.exists("Work Order", work_order_name):
+            return {"success": False, "message": _("Không tìm thấy lệnh sản xuất. Có thể đã bị xóa.")}
+        
+        work_order = frappe.get_doc("Work Order", work_order_name)
+        
+        if work_order.docstatus != 1:
+            return {
+                "success": False,
+                "message": _("Lệnh sản xuất chưa được duyệt. Không cần dừng.")
+            }
+        
+        if work_order.status == "Completed":
+            return {
+                "success": False,
+                "message": _("Lệnh sản xuất đã hoàn thành. Không thể dừng.")
+            }
+        
+        if work_order.status == "Stopped":
+            return {
+                "success": False,
+                "message": _("Lệnh sản xuất đã dừng trước đó.")
+            }
+        
+        # Stop work order
+        work_order.db_set("status", "Stopped")
+        frappe.db.commit()
+        
+        return {
+            "success": True,
+            "message": _("Đã dừng lệnh sản xuất.")
+        }
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "stop_work_order Error")
+        return {
+            "success": False,
+            "message": _parse_friendly_error(str(e))
+        }
+
+
+@frappe.whitelist()
+def cancel_work_order(work_order_name):
+    """
+    Hủy lệnh sản xuất - Chỉ có thể hủy nếu chưa bắt đầu sản xuất
+    
+    Args:
+        work_order_name: Tên Work Order
+    
+    Returns:
+        dict: {success: bool, message: str}
+    """
+    try:
+        if not frappe.db.exists("Work Order", work_order_name):
+            return {"success": False, "message": _("Không tìm thấy lệnh sản xuất. Có thể đã bị xóa.")}
+        
+        work_order = frappe.get_doc("Work Order", work_order_name)
+        
+        # Nếu còn là Draft (chờ duyệt) -> chỉ cần xóa
+        if work_order.docstatus == 0:
+            work_order.delete()
+            return {
+                "success": True,
+                "message": _("Đã xóa lệnh sản xuất.")
+            }
+        
+        # Nếu đã submitted
+        if work_order.docstatus == 1:
+            # Chỉ cho phép hủy nếu chưa bắt đầu sản xuất (chưa có Stock Entry nào)
+            stock_entries = frappe.get_all("Stock Entry", 
+                filters={"work_order": work_order_name, "docstatus": 1},
+                limit=1
+            )
+            
+            if stock_entries:
+                return {
+                    "success": False,
+                    "message": _("Không thể hủy vì đã có phiếu xuất/nhập kho. Vui lòng sử dụng chức năng 'Dừng sản xuất'.")
+                }
+            
+            if work_order.produced_qty > 0:
+                return {
+                    "success": False,
+                    "message": _("Không thể hủy vì đã có sản phẩm hoàn thành. Vui lòng sử dụng chức năng 'Dừng sản xuất'.")
+                }
+            
+            # Cancel work order
+            work_order.cancel()
+            return {
+                "success": True,
+                "message": _("Đã hủy lệnh sản xuất.")
+            }
+        
+        # Đã bị hủy rồi
+        if work_order.docstatus == 2:
+            return {
+                "success": False,
+                "message": _("Lệnh sản xuất đã được hủy trước đó.")
+            }
+        
+        return {
+            "success": False,
+            "message": _("Không thể hủy lệnh sản xuất ở trạng thái hiện tại.")
+        }
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "cancel_work_order Error")
+        return {
+            "success": False,
+            "message": _parse_friendly_error(str(e))
         }
 
 

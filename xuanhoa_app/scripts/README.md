@@ -76,9 +76,35 @@ bench --site erpnext.localhost execute xuanhoa_app.scripts.reset_all_data.run_ve
 
 | Email | Password | Role | Mô tả |
 |-------|----------|------|-------|
-| `admin@xuanhoa.local` | `admin123` | System Manager | Quản trị hệ thống |
-| `kho@xuanhoa.local` | `kho123` | Stock Manager | Quản lý kho |
-| `sanxuat@xuanhoa.local` | `sanxuat123` | Manufacturing Manager | Quản lý sản xuất |
+| `admin@xuanhoa.local` | `admin123` | System Manager + All | Quản trị hệ thống |
+| `kho@xuanhoa.local` | `kho123` | Stock Manager/User | Quản lý kho |
+| `sanxuat@xuanhoa.local` | `sanxuat123` | Manufacturing Manager/User | Quản lý sản xuất |
+| `muahang@xuanhoa.local` | `muahang123` | Purchase Manager/User | Quản lý mua hàng |
+| `banhang@xuanhoa.local` | `banhang123` | Sales Manager/User | Quản lý bán hàng |
+| `ketoan@xuanhoa.local` | `ketoan123` | Accounts Manager/User | Quản lý kế toán |
+
+---
+
+## 🔢 Quy ước đặt mã (Naming Conventions)
+
+### Stock Entry (Phiếu kho)
+| Loại | Prefix | Ví dụ |
+|------|--------|-------|
+| Phiếu nhập kho | NK- | NK-2025-00001 |
+| Phiếu xuất kho | XK- | XK-2025-00001 |
+| Phiếu chuyển kho | CK- | CK-2025-00001 |
+| Phiếu cấp phát NVL | CP- | CP-2025-00001 |
+| Phiếu sản xuất | SX- | SX-2025-00001 |
+| Phiếu đóng gói | DG- | DG-2025-00001 |
+| Phiếu tháo gỡ | TG- | TG-2025-00001 |
+
+### Work Order (Lệnh sản xuất)
+- Format: `MFG-WO-YYYY-XXXXX`
+- Ví dụ: `MFG-WO-2025-00001`
+
+### BOM (Định mức nguyên vật liệu)
+- Format: `BOM-{ITEM_CODE}-XXX`
+- Ví dụ: `BOM-LAMP-10W-50LED-001`
 
 ---
 

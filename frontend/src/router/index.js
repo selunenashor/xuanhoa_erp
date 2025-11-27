@@ -74,6 +74,12 @@ const routes = [
         meta: { title: 'Lệnh sản xuất' }
       },
       {
+        path: 'production/orders/create',
+        name: 'WorkOrderCreate',
+        component: () => import('@/pages/production/WorkOrderCreate.vue'),
+        meta: { title: 'Tạo lệnh sản xuất' }
+      },
+      {
         path: 'production/orders/:name',
         name: 'WorkOrderDetail',
         component: () => import('@/pages/production/WorkOrderDetail.vue'),
