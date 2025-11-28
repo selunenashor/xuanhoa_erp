@@ -1,5 +1,6 @@
 email,first_name,last_name,full_name,username,enabled,user_type,language,time_zone,send_welcome_email,new_password
-admin@xuanhoa.local,Admin,Hệ Thống,Admin Hệ Thống,admin,1,System User,vi,Asia/Ho_Chi_Minh,0,admin123
+admin@xuanhoa.local,Admin,1,Admin Hệ Thống 1,admin,1,System User,vi,Asia/Ho_Chi_Minh,0,admin123
+admin1@xuanhoa.local,Admin,2,Admin Hệ Thống 2,admin,1,System User,vi,Asia/Ho_Chi_Minh,0,admin123
 kho@xuanhoa.local,Quản Lý,Kho,Quản Lý Kho,kho,1,System User,vi,Asia/Ho_Chi_Minh,0,kho123
 sanxuat@xuanhoa.local,Quản Lý,Sản Xuất,Quản Lý Sản Xuất,sanxuat,1,System User,vi,Asia/Ho_Chi_Minh,0,sanxuat123
 muahang@xuanhoa.local,Quản Lý,Mua Hàng,Quản Lý Mua Hàng,muahang,1,System User,vi,Asia/Ho_Chi_Minh,0,muahang123

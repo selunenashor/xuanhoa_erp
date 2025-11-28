@@ -50,62 +50,10 @@ UOM_MAP = {
     'Meter': 'Meter',
 }
 
-# Users to create
-USERS_DATA = [
-    {
-        'email': 'admin@xuanhoa.local',
-        'first_name': 'Admin',
-        'last_name': 'Hệ Thống',
-        'roles': ['System Manager'],
-        'password': 'admin123'
-    },
-    {
-        'email': 'kho@xuanhoa.local',
-        'first_name': 'Quản Lý',
-        'last_name': 'Kho',
-        'roles': ['Stock Manager', 'Stock User'],
-        'password': 'kho123'
-    },
-    {
-        'email': 'sanxuat@xuanhoa.local',
-        'first_name': 'Quản Lý',
-        'last_name': 'Sản Xuất',
-        'roles': ['Manufacturing Manager', 'Manufacturing User', 'Stock User'],
-        'password': 'sanxuat123'
-    },
-]
-
-# Initial stock data
-INITIAL_STOCK = [
-    # Nguyên vật liệu -> Kho Chính
-    {'item_code': 'LED-5W', 'qty': 1000, 'rate': 5000, 'warehouse': 'Kho Chính'},
-    {'item_code': 'LED-10W', 'qty': 800, 'rate': 8000, 'warehouse': 'Kho Chính'},
-    {'item_code': 'PCB-DRIVER', 'qty': 400, 'rate': 12000, 'warehouse': 'Kho Chính'},
-    {'item_code': 'CAP-ALUMINUM', 'qty': 1000, 'rate': 3000, 'warehouse': 'Kho Chính'},
-    {'item_code': 'HEAT-SINK', 'qty': 600, 'rate': 8000, 'warehouse': 'Kho Chính'},
-    {'item_code': 'WIRE-COPPER', 'qty': 50, 'rate': 50000, 'warehouse': 'Kho Chính'},
-    # Thành phẩm -> Kho Thành Phẩm
-    {'item_code': 'LAMP-10W-50LED', 'qty': 50, 'rate': 150000, 'warehouse': 'Kho Thành Phẩm'},
-    {'item_code': 'SPOTLIGHT-30W', 'qty': 30, 'rate': 250000, 'warehouse': 'Kho Thành Phẩm'},
-]
-
-# Work Orders to create
-WORK_ORDERS_DATA = [
-    {
-        'item': 'LAMP-10W-50LED',
-        'qty': 100,
-        'fg_warehouse': 'Kho Thành Phẩm',
-        'wip_warehouse': 'Kho WIP',
-        'source_warehouse': 'Kho Chính'
-    },
-    {
-        'item': 'SPOTLIGHT-30W',
-        'qty': 50,
-        'fg_warehouse': 'Kho Thành Phẩm',
-        'wip_warehouse': 'Kho WIP',
-        'source_warehouse': 'Kho Chính'
-    }
-]
+# Dữ liệu được đọc từ CSV files trong thư mục example/
+# - user.csv, user_role.csv: Danh sách users và roles
+# - initial_stock.csv: Tồn kho ban đầu
+# - work_order.csv: Work orders mẫu
 
 
 # =============================================================================
@@ -130,6 +78,58 @@ def read_csv(filename):
         return []
     with open(filepath, 'r', encoding='utf-8') as f:
         return list(csv.DictReader(f))
+
+
+def load_users_data():
+    """Load users data from CSV files (user.csv + user_role.csv)"""
+    users_csv = read_csv('user.csv')
+    roles_csv = read_csv('user_role.csv')
+    
+    # Build roles mapping per user
+    user_roles = {}
+    for row in roles_csv:
+        email = row['parent']
+        role = row['role']
+        if email not in user_roles:
+            user_roles[email] = []
+        user_roles[email].append(role)
+    
+    # Build users list
+    users = []
+    for row in users_csv:
+        email = row['email']
+        users.append({
+            'email': email,
+            'first_name': row['first_name'],
+            'last_name': row['last_name'],
+            'roles': user_roles.get(email, ['System Manager']),
+            'password': row.get('new_password', 'admin123')
+        })
+    
+    return users
+
+
+def load_initial_stock():
+    """Load initial stock data from CSV"""
+    rows = read_csv('initial_stock.csv')
+    return [{
+        'item_code': row['item_code'],
+        'qty': flt(row['qty']),
+        'rate': flt(row['rate']),
+        'warehouse': row['warehouse']
+    } for row in rows]
+
+
+def load_work_orders_data():
+    """Load work orders data from CSV"""
+    rows = read_csv('work_order.csv')
+    return [{
+        'item': row['Item'],
+        'qty': flt(row['Qty to Manufacture']),
+        'fg_warehouse': row.get('FG Warehouse', 'Kho Thành Phẩm').replace(f' - {COMPANY_ABBR}', ''),
+        'wip_warehouse': row.get('WIP Warehouse', 'Kho WIP').replace(f' - {COMPANY_ABBR}', ''),
+        'source_warehouse': row.get('Source Warehouse', 'Kho Chính').replace(f' - {COMPANY_ABBR}', '')
+    } for row in rows]
 
 
 def safe_delete_doc(doctype, name):
@@ -509,7 +509,12 @@ def setup_users():
     print("👥 TẠO USERS")
     print("="*60)
     
-    for u in USERS_DATA:
+    users_data = load_users_data()
+    if not users_data:
+        print("  ⚠️  Không có dữ liệu users từ CSV")
+        return
+    
+    for u in users_data:
         try:
             if frappe.db.exists('User', u['email']):
                 user = frappe.get_doc('User', u['email'])
@@ -548,7 +553,7 @@ def setup_users():
     
     print("\n  📋 Danh sách Users:")
     print("  " + "-"*50)
-    for u in USERS_DATA:
+    for u in users_data:
         print(f"  {u['email']} / {u['password']}")
 
 
@@ -779,9 +784,14 @@ def create_initial_stock():
     """Create initial stock via Stock Entry"""
     print("\n📦 Tạo tồn kho ban đầu...")
     
+    initial_stock = load_initial_stock()
+    if not initial_stock:
+        print("  ⚠️  Không có dữ liệu initial_stock.csv")
+        return
+    
     # Filter to only existing items
     existing_items = []
-    for item in INITIAL_STOCK:
+    for item in initial_stock:
         if frappe.db.exists('Item', item['item_code']):
             wh_name = get_warehouse_name(item['warehouse'])
             if frappe.db.exists('Warehouse', wh_name):
@@ -831,7 +841,12 @@ def import_work_orders():
     print("\n📦 Import Work Orders...")
     count = 0
     
-    for wo in WORK_ORDERS_DATA:
+    work_orders_data = load_work_orders_data()
+    if not work_orders_data:
+        print("  ⚠️  Không có dữ liệu work_order.csv")
+        return
+    
+    for wo in work_orders_data:
         item = wo['item']
         
         if not frappe.db.exists('Item', item):
@@ -972,28 +987,6 @@ def run():
     print("\n" + "="*70)
     print("🎉 HOÀN TẤT RESET DỮ LIỆU!")
     print("="*70)
-    print(f"""
-📋 THÔNG TIN HỆ THỐNG:
-
-Company: {COMPANY_NAME} ({COMPANY_ABBR})
-
-Users:
-  - admin@xuanhoa.local / admin123 (System Manager)
-  - kho@xuanhoa.local / kho123 (Stock Manager)
-  - sanxuat@xuanhoa.local / sanxuat123 (Manufacturing Manager)
-
-Warehouses:
-  - Kho Chính - {COMPANY_ABBR} (Nguyên vật liệu)
-  - Kho Thành Phẩm - {COMPANY_ABBR} (Thành phẩm)
-  - Kho WIP - {COMPANY_ABBR} (Work In Progress)
-
-Tồn kho ban đầu đã được tạo qua Stock Entry
-Work Orders đã được tạo (Draft)
-BOMs đã được submit và active
-Role Permissions đã được thiết lập
-
-⚠️  LƯU Ý: Sau khi chạy script, hãy đăng nhập lại để refresh session.
-""")
 
 
 def run_delete_only():
@@ -1071,17 +1064,12 @@ def setup_all():
     run()
     
     # Step 2: Import additional data (from import_data.py)
+    # Note: Role Permissions và Users đã được setup trong run()
     print("\n" + "="*70)
     print("📥 IMPORT DỮ LIỆU BỔ SUNG")
     print("="*70)
     
     from xuanhoa_app.scripts import import_data
-    
-    # Setup permissions
-    import_data.setup_role_permissions()
-    
-    # Setup additional users
-    import_data.setup_users()
     
     # Import customer groups and territories
     import_data.import_customer_groups()
@@ -1104,34 +1092,6 @@ def setup_all():
     print("🎉 HOÀN TẤT SETUP TOÀN BỘ HỆ THỐNG!")
     print("="*70)
     print(f"""
-📋 THÔNG TIN HỆ THỐNG:
-
-Company: {COMPANY_NAME} ({COMPANY_ABBR})
-
-👥 USERS (6 users):
-  ┌──────────────────────────────┬──────────────┬────────────────────────────────────┐
-  │ Email                        │ Password     │ Roles                              │
-  ├──────────────────────────────┼──────────────┼────────────────────────────────────┤
-  │ admin@xuanhoa.local          │ admin123     │ System Manager + All               │
-  │ kho@xuanhoa.local            │ kho123       │ Stock Manager/User                 │
-  │ sanxuat@xuanhoa.local        │ sanxuat123   │ Manufacturing Manager/User         │
-  │ muahang@xuanhoa.local        │ muahang123   │ Purchase Manager/User + Stock User │
-  │ banhang@xuanhoa.local        │ banhang123   │ Sales Manager/User + Stock User    │
-  │ ketoan@xuanhoa.local         │ ketoan123    │ Accounts Manager/User              │
-  └──────────────────────────────┴──────────────┴────────────────────────────────────┘
-
-📦 WAREHOUSES:
-  - Kho Chính - {COMPANY_ABBR} (Nguyên vật liệu)
-  - Kho Thành Phẩm - {COMPANY_ABBR} (Thành phẩm)  
-  - Kho WIP - {COMPANY_ABBR} (Work In Progress)
-
-🏢 SUPPLIERS: 4 nhà cung cấp
-👤 CUSTOMERS: 5 khách hàng
-📦 ITEMS: 10 sản phẩm (7 NVL + 3 thành phẩm)
-💰 ITEM PRICES: Giá mua + giá bán
-🏦 BANK ACCOUNTS: Ngân hàng Nội địa, Ngân hàng Quốc tế
-💳 MODE OF PAYMENT: Cash, Wire Transfer, Cheque, Credit Card, Bank Draft
-
 ✅ Hệ thống đã sẵn sàng sử dụng!
 ⚠️ Hãy đăng nhập lại để refresh session.
 """)

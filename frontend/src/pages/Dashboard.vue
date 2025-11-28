@@ -3,22 +3,18 @@
     <!-- Welcome Section -->
     <div class="bg-gradient-to-r from-primary to-primary-light rounded-xl p-6 text-white">
       <h2 class="text-2xl font-bold mb-2">Xin chào, {{ userStore.fullName }}!</h2>
-      <p class="text-white/80">Chào mừng bạn đến với hệ thống Quản lý Sản xuất</p>
+      <p class="text-white/80">Chào mừng bạn đến với hệ thống Quản lý Sản xuất Xuân Hòa</p>
     </div>
 
     <!-- KPI Cards -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
       <div v-for="kpi in kpiCards" :key="kpi.id" 
-           class="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+           class="bg-white rounded-xl p-5 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
         <div class="flex items-start justify-between">
           <div>
             <p class="text-sm text-gray-500 mb-1">{{ kpi.label }}</p>
             <p class="text-2xl font-bold text-gray-800">{{ kpi.value }}</p>
-            <p v-if="kpi.trend !== undefined" :class="['text-sm mt-1', kpi.trend >= 0 ? 'text-success' : 'text-error']">
-              <span v-if="kpi.trend >= 0">↑</span>
-              <span v-else>↓</span>
-              {{ Math.abs(kpi.trend) }}% so với tuần trước
-            </p>
+            <p v-if="kpi.subLabel" class="text-xs text-gray-400 mt-1">{{ kpi.subLabel }}</p>
           </div>
           <div :class="['w-12 h-12 rounded-lg flex items-center justify-center', kpi.bgColor]">
             <component :is="kpi.icon" :class="['w-6 h-6', kpi.iconColor]" />
@@ -27,23 +23,91 @@
       </div>
     </div>
 
-    <!-- Quick Actions -->
-    <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-      <h3 class="text-lg font-semibold text-gray-800 mb-4">Thao tác nhanh</h3>
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <router-link 
-          v-for="action in quickActions" 
-          :key="action.path"
-          :to="action.path"
-          class="flex flex-col items-center gap-3 p-4 rounded-xl border-2 border-dashed border-gray-200 
-                 hover:border-primary hover:bg-primary/5 transition-colors group"
-        >
-          <div class="w-12 h-12 rounded-xl bg-gray-100 group-hover:bg-primary/10 
-                      flex items-center justify-center transition-colors">
-            <component :is="action.icon" class="w-6 h-6 text-gray-500 group-hover:text-primary" />
+    <!-- Quick Actions Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <!-- Kho hàng -->
+      <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+        <div class="flex items-center gap-2 mb-4">
+          <div class="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
+            <BoxIcon class="w-5 h-5 text-blue-600" />
           </div>
-          <span class="text-sm font-medium text-gray-700 text-center">{{ action.label }}</span>
-        </router-link>
+          <h3 class="text-lg font-semibold text-gray-800">Kho hàng</h3>
+        </div>
+        <div class="space-y-2">
+          <router-link 
+            to="/stock/receipt"
+            class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:border-primary hover:bg-primary/5 transition-colors group"
+          >
+            <PlusIcon class="w-5 h-5 text-success" />
+            <span class="text-sm font-medium text-gray-700 group-hover:text-primary">Tạo phiếu nhập kho</span>
+          </router-link>
+          <router-link 
+            to="/stock/issue"
+            class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:border-primary hover:bg-primary/5 transition-colors group"
+          >
+            <TruckIcon class="w-5 h-5 text-info" />
+            <span class="text-sm font-medium text-gray-700 group-hover:text-primary">Tạo phiếu xuất kho</span>
+          </router-link>
+          <router-link 
+            to="/stock/entries"
+            class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:border-primary hover:bg-primary/5 transition-colors group"
+          >
+            <ClipboardIcon class="w-5 h-5 text-gray-500" />
+            <span class="text-sm font-medium text-gray-700 group-hover:text-primary">Xem danh sách phiếu</span>
+          </router-link>
+        </div>
+      </div>
+
+      <!-- Sản xuất -->
+      <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+        <div class="flex items-center gap-2 mb-4">
+          <div class="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center">
+            <ManufactureIcon class="w-5 h-5 text-amber-600" />
+          </div>
+          <h3 class="text-lg font-semibold text-gray-800">Sản xuất</h3>
+        </div>
+        <div class="space-y-2">
+          <router-link 
+            to="/production/orders"
+            class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:border-primary hover:bg-primary/5 transition-colors group"
+          >
+            <ClipboardIcon class="w-5 h-5 text-amber-500" />
+            <span class="text-sm font-medium text-gray-700 group-hover:text-primary">Lệnh sản xuất</span>
+          </router-link>
+          <router-link 
+            to="/production/boms"
+            class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:border-primary hover:bg-primary/5 transition-colors group"
+          >
+            <BOMIcon class="w-5 h-5 text-purple-500" />
+            <span class="text-sm font-medium text-gray-700 group-hover:text-primary">Định mức nguyên vật liệu</span>
+          </router-link>
+        </div>
+      </div>
+
+      <!-- Danh mục -->
+      <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+        <div class="flex items-center gap-2 mb-4">
+          <div class="w-8 h-8 rounded-lg bg-teal-100 flex items-center justify-center">
+            <BoxIcon class="w-5 h-5 text-teal-600" />
+          </div>
+          <h3 class="text-lg font-semibold text-gray-800">Danh mục</h3>
+        </div>
+        <div class="space-y-2">
+          <router-link 
+            to="/master/items"
+            class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:border-primary hover:bg-primary/5 transition-colors group"
+          >
+            <BoxIcon class="w-5 h-5 text-teal-500" />
+            <span class="text-sm font-medium text-gray-700 group-hover:text-primary">Quản lý sản phẩm</span>
+          </router-link>
+          <router-link 
+            to="/stock/warehouses"
+            class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:border-primary hover:bg-primary/5 transition-colors group"
+          >
+            <WarehouseIcon class="w-5 h-5 text-gray-500" />
+            <span class="text-sm font-medium text-gray-700 group-hover:text-primary">Quản lý kho</span>
+          </router-link>
+        </div>
       </div>
     </div>
 
@@ -70,11 +134,12 @@
       
       <!-- Empty state -->
       <div v-else-if="recentActivities.length === 0" class="text-center py-8 text-gray-500">
-        Chưa có hoạt động nào
+        <ClipboardIcon class="w-12 h-12 mx-auto text-gray-300 mb-2" />
+        <p>Chưa có hoạt động nào</p>
       </div>
       
       <!-- Activities list -->
-      <div v-else class="space-y-4">
+      <div v-else class="space-y-3">
         <div v-for="activity in recentActivities" :key="activity.id"
              @click="goToActivityDetail(activity)"
              :class="[
@@ -143,8 +208,6 @@ const translateUOMInText = (text) => {
   if (!text) return text
   let result = text
   for (const [eng, viet] of Object.entries(UOM_TRANSLATIONS)) {
-    // Replace whole word only, case-sensitive
-    // Use word boundary to avoid partial matches
     const regex = new RegExp(`(\\d+\\.?\\d*)\\s*${eng}\\b`, 'g')
     result = result.replace(regex, `$1 ${viet}`)
   }
@@ -197,13 +260,13 @@ const TruckIcon = {
   ])
 }
 
-const ChartIcon = {
+const ManufactureIcon = {
   render: () => h('svg', { fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' }, [
     h('path', { 
       'stroke-linecap': 'round', 
       'stroke-linejoin': 'round', 
       'stroke-width': '2',
-      d: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z'
+      d: 'M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z'
     })
   ])
 }
@@ -237,6 +300,28 @@ const RefreshIcon = {
       'stroke-linejoin': 'round', 
       'stroke-width': '2',
       d: 'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15'
+    })
+  ])
+}
+
+const WarehouseIcon = {
+  render: () => h('svg', { fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' }, [
+    h('path', { 
+      'stroke-linecap': 'round', 
+      'stroke-linejoin': 'round', 
+      'stroke-width': '2',
+      d: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4'
+    })
+  ])
+}
+
+const BOMIcon = {
+  render: () => h('svg', { fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' }, [
+    h('path', { 
+      'stroke-linecap': 'round', 
+      'stroke-linejoin': 'round', 
+      'stroke-width': '2',
+      d: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4'
     })
   ])
 }
@@ -282,53 +367,49 @@ const formatNumber = (num) => {
 const kpiCards = computed(() => {
   const data = kpiData.value
   
-  // Tính tổng Work Orders đang chạy
   const woInProgress = data?.work_orders?.['In Process'] || 0
   const woNotStarted = data?.work_orders?.['Not Started'] || 0
+  const woCompleted = data?.work_orders?.['Completed'] || 0
   
   return [
     {
       id: 1,
       label: 'Lệnh SX đang chạy',
       value: woInProgress + woNotStarted,
-      icon: ClipboardIcon,
-      bgColor: 'bg-primary/10',
-      iconColor: 'text-primary'
+      subLabel: woCompleted > 0 ? `${woCompleted} đã hoàn thành` : null,
+      icon: ManufactureIcon,
+      bgColor: 'bg-amber-100',
+      iconColor: 'text-amber-600'
     },
     {
       id: 2,
       label: 'Giá trị tồn kho',
-      value: formatNumber(Math.round((data?.stock_value || 0) / 1000)) + 'K',
+      value: formatNumber(Math.round((data?.stock_value || 0) / 1000000)) + ' tr',
+      subLabel: 'Tổng giá trị hàng tồn',
       icon: BoxIcon,
-      bgColor: 'bg-warning/10',
-      iconColor: 'text-warning'
+      bgColor: 'bg-teal-100',
+      iconColor: 'text-teal-600'
     },
     {
       id: 3,
       label: 'Nhập kho hôm nay',
       value: data?.receipts_today || 0,
+      subLabel: 'Phiếu nhập',
       icon: PlusIcon,
-      bgColor: 'bg-success/10',
-      iconColor: 'text-success'
+      bgColor: 'bg-green-100',
+      iconColor: 'text-green-600'
     },
     {
       id: 4,
       label: 'Xuất kho hôm nay',
       value: data?.issues_today || 0,
+      subLabel: 'Phiếu xuất',
       icon: TruckIcon,
-      bgColor: 'bg-info/10',
-      iconColor: 'text-info'
+      bgColor: 'bg-blue-100',
+      iconColor: 'text-blue-600'
     }
   ]
 })
-
-// Quick actions
-const quickActions = [
-  { path: '/stock/receipt', label: 'Nhập kho', icon: PlusIcon },
-  { path: '/stock/issue', label: 'Xuất kho', icon: TruckIcon },
-  { path: '/production/orders', label: 'Lệnh sản xuất', icon: ClipboardIcon },
-  { path: '/', label: 'Báo cáo', icon: ChartIcon }
-]
 
 // Load recent activities
 const loadRecentActivities = async () => {

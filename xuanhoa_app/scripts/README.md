@@ -127,13 +127,8 @@ bench --site erpnext.localhost execute xuanhoa_app.scripts.import_data.run_permi
 
 | Email | Password | Role | Mô tả |
 |-------|----------|------|-------|
-| `admin@xuanhoa.local` | `admin123` | System Manager + All | Quản trị hệ thống |
-| `kho@xuanhoa.local` | `kho123` | Stock Manager/User | Quản lý kho |
-| `sanxuat@xuanhoa.local` | `sanxuat123` | Manufacturing Manager/User + Stock User | Quản lý sản xuất |
-| `muahang@xuanhoa.local` | `muahang123` | Purchase Manager/User + Stock User | Quản lý mua hàng |
-| `banhang@xuanhoa.local` | `banhang123` | Sales Manager/User + Stock User | Quản lý bán hàng |
-| `ketoan@xuanhoa.local` | `ketoan123` | Accounts Manager/User | Quản lý kế toán |
-
+| `admin@xuanhoa.local` | `admin123` | System Manager + All | Quản trị hệ thống 
+| `admin1@xuanhoa.local` | `admin123` | System Manager + All | Quản trị hệ thống 
 ---
 
 ## 💰 Accounting Setup

@@ -23,53 +23,7 @@ UOM_MAP = {
     'Mét': 'Meter',
 }
 
-# Users cần tạo với roles phù hợp
-# Lưu ý: System Manager đã được cấp quyền cho tất cả DocTypes trong role_permission.csv
-# nên admin chỉ cần role System Manager là đủ
-USERS = [
-    {
-        'email': 'admin@xuanhoa.local',
-        'first_name': 'Admin',
-        'last_name': 'Hệ Thống',
-        'roles': ['System Manager'],  # Đã có full quyền qua role_permission.csv
-        'password': 'admin123'
-    },
-    {
-        'email': 'kho@xuanhoa.local',
-        'first_name': 'Quản Lý',
-        'last_name': 'Kho',
-        'roles': ['Stock Manager', 'Stock User'],
-        'password': 'kho123'
-    },
-    {
-        'email': 'sanxuat@xuanhoa.local',
-        'first_name': 'Quản Lý',
-        'last_name': 'Sản Xuất',
-        'roles': ['Manufacturing Manager', 'Manufacturing User', 'Stock User'],
-        'password': 'sanxuat123'
-    },
-    {
-        'email': 'muahang@xuanhoa.local',
-        'first_name': 'Quản Lý',
-        'last_name': 'Mua Hàng',
-        'roles': ['Purchase Manager', 'Purchase User', 'Stock User'],
-        'password': 'muahang123'
-    },
-    {
-        'email': 'banhang@xuanhoa.local',
-        'first_name': 'Quản Lý',
-        'last_name': 'Bán Hàng',
-        'roles': ['Sales Manager', 'Sales User', 'Stock User'],
-        'password': 'banhang123'
-    },
-    {
-        'email': 'ketoan@xuanhoa.local',
-        'first_name': 'Quản Lý',
-        'last_name': 'Kế Toán',
-        'roles': ['Accounts Manager', 'Accounts User'],
-        'password': 'ketoan123'
-    },
-]
+# Dữ liệu users được đọc từ CSV files: user.csv, user_role.csv
 
 
 def get_uom(vietnamese_uom):
@@ -87,11 +41,38 @@ def read_csv(filename):
         return list(csv.DictReader(f))
 
 
+def load_users_data():
+    """Load users data from CSV files (user.csv + user_role.csv)"""
+    users_csv = read_csv('user.csv')
+    roles_csv = read_csv('user_role.csv')
+    
+    # Build roles mapping per user
+    user_roles = {}
+    for row in roles_csv:
+        email = row['parent']
+        role = row['role']
+        if email not in user_roles:
+            user_roles[email] = []
+        user_roles[email].append(role)
+    
+    # Build users list
+    users = []
+    for row in users_csv:
+        email = row['email']
+        users.append({
+            'email': email,
+            'first_name': row['first_name'],
+            'last_name': row['last_name'],
+            'roles': user_roles.get(email, ['System Manager']),
+            'password': row.get('new_password', 'admin123')
+        })
+    
+    return users
+
+
 def delete_old_data():
     """Xóa dữ liệu cũ"""
-    print("\n" + "="*50)
-    print("🗑️  XÓA DỮ LIỆU CŨ")
-    print("="*50)
+    print("\n🗑️  Xóa dữ liệu cũ...")
     
     # Transactions
     for dt in ['Payment Entry', 'Sales Invoice', 'Purchase Invoice',
@@ -103,8 +84,6 @@ def delete_old_data():
                 frappe.delete_doc(dt, name, force=True, ignore_permissions=True)
             except:
                 pass
-        if records:
-            print(f"  Đã xóa {len(records)} {dt}")
     
     # Items
     items = frappe.get_all('Item', pluck='name')
@@ -113,8 +92,6 @@ def delete_old_data():
             frappe.delete_doc('Item', name, force=True, ignore_permissions=True)
         except:
             pass
-    if items:
-        print(f"  Đã xóa {len(items)} Item")
     
     # Suppliers
     suppliers = frappe.get_all('Supplier', pluck='name')
@@ -123,8 +100,6 @@ def delete_old_data():
             frappe.delete_doc('Supplier', name, force=True, ignore_permissions=True)
         except:
             pass
-    if suppliers:
-        print(f"  Đã xóa {len(suppliers)} Supplier")
     
     # Customers
     customers = frappe.get_all('Customer', pluck='name')
@@ -133,22 +108,18 @@ def delete_old_data():
             frappe.delete_doc('Customer', name, force=True, ignore_permissions=True)
         except:
             pass
-    if customers:
-        print(f"  Đã xóa {len(customers)} Customer")
     
     frappe.db.commit()
-    print("✅ Hoàn tất xóa dữ liệu cũ")
+    print("  ✅ Đã xóa dữ liệu cũ")
 
 
 def setup_role_permissions():
     """Thiết lập permissions cho các DocType từ CSV"""
-    print("\n" + "="*50)
-    print("🔐 THIẾT LẬP ROLE PERMISSIONS")
-    print("="*50)
+    print("\n🔐 Setup Role Permissions...")
     
     permissions_data = read_csv('role_permission.csv')
     if not permissions_data:
-        print("⚠️  Không tìm thấy file role_permission.csv")
+        print("  ⚠️  Không tìm thấy file role_permission.csv")
         return 0
     
     # Group by doctype
@@ -164,7 +135,6 @@ def setup_role_permissions():
         try:
             # Check if doctype exists
             if not frappe.db.exists('DocType', doctype):
-                print(f"  ⚠️  DocType '{doctype}' không tồn tại, bỏ qua")
                 continue
             
             doc = frappe.get_doc('DocType', doctype)
@@ -174,7 +144,6 @@ def setup_role_permissions():
                 
                 # Check if role exists
                 if not frappe.db.exists('Role', role):
-                    print(f"  ⚠️  Role '{role}' không tồn tại, bỏ qua")
                     continue
                 
                 # Check if permission already exists
@@ -220,24 +189,26 @@ def setup_role_permissions():
                 count += 1
             
             doc.save(ignore_permissions=True)
-            print(f"  ✅ {doctype}: {len(perms)} permissions")
             
         except Exception as e:
             print(f"  ❌ Lỗi {doctype}: {str(e)}")
     
     frappe.db.commit()
-    print(f"\n✅ Đã thiết lập {count} permissions")
+    print(f"  ✅ {len(doctypes)} DocTypes, {count} permissions")
     return count
 
 
 def setup_users():
     """Tạo users với roles đầy đủ"""
-    print("\n" + "="*50)
-    print("👥 TẠO USERS")
-    print("="*50)
+    print("\n👥 Setup Users...")
+    
+    users = load_users_data()
+    if not users:
+        print("  ⚠️  Không có dữ liệu users từ CSV")
+        return 0
     
     count = 0
-    for u in USERS:
+    for u in users:
         email = u['email']
         
         if frappe.db.exists('User', email):
@@ -268,18 +239,18 @@ def setup_users():
             })
             user.insert(ignore_permissions=True)
             update_password(email, u['password'])
-            print(f"  ✅ {email} - Roles: {', '.join(u['roles'][:3])}...")
             count += 1
     
     frappe.db.commit()
+    print(f"  ✅ {count} Users")
     
     # Print user table
-    print("\n" + "-"*70)
-    print(f"{'Email':<30} {'Password':<15} {'Roles':<25}")
-    print("-"*70)
-    for u in USERS:
+    print("\n  " + "-"*65)
+    print(f"  {'Email':<28} {'Password':<12} {'Roles':<25}")
+    print("  " + "-"*65)
+    for u in users:
         roles_str = ', '.join(u['roles'][:2]) + ('...' if len(u['roles']) > 2 else '')
-        print(f"{u['email']:<30} {u['password']:<15} {roles_str:<25}")
+        print(f"  {u['email']:<28} {u['password']:<12} {roles_str:<25}")
     
     return count
 
@@ -929,10 +900,6 @@ def run():
     delete_old_data()
     
     # Step 2: Import master data
-    print("\n" + "="*50)
-    print("📥 IMPORT DỮ LIỆU MỚI")
-    print("="*50)
-    
     import_item_groups()
     import_supplier_groups()
     import_customer_groups()
@@ -943,28 +910,20 @@ def run():
     import_items()
     import_item_prices()
     
-    # Step 2.5: Setup accounting
+    # Step 3: Setup accounting
     setup_accounts()
     setup_mode_of_payment_accounts()
     
-    # Step 3: Import manufacturing
+    # Step 4: Import manufacturing
     import_boms()
     import_work_orders()
     
-    # Step 4: Import stock transactions
+    # Step 5: Import stock transactions
     import_purchase_receipts()
     
     print("\n" + "="*60)
     print("🎉 HOÀN TẤT IMPORT DỮ LIỆU MẪU!")
     print("="*60)
-    print("\n📝 LƯU Ý:")
-    print("  - Permissions đã được thiết lập cho các DocTypes")
-    print("  - Users đã được tạo với đầy đủ roles")
-    print("  - Item Prices đã được tạo (giá mua và bán)")
-    print("  - Bank Accounts và Mode of Payment đã được thiết lập")
-    print("  - BOM đã được submit, sẵn sàng sử dụng")
-    print("  - Work Order ở trạng thái Draft, cần Submit để sản xuất")
-    print("  - Purchase Receipt đã submit, tồn kho NVL đã được cập nhật")
 
 
 def run_permissions_only():
@@ -976,7 +935,9 @@ def run_permissions_only():
     setup_role_permissions()
     setup_users()
     
-    print("\n✅ Hoàn tất!")
+    print("\n" + "="*60)
+    print("✅ HOÀN TẤT!")
+    print("="*60)
 
 
 def run_users_only():
@@ -987,7 +948,9 @@ def run_users_only():
     
     setup_users()
     
-    print("\n✅ Hoàn tất!")
+    print("\n" + "="*60)
+    print("✅ HOÀN TẤT!")
+    print("="*60)
 
 
 def run_master_data_only():
@@ -995,10 +958,6 @@ def run_master_data_only():
     print("\n" + "="*60)
     print("📥 IMPORT MASTER DATA (KHÔNG XÓA GIAO DỊCH)")
     print("="*60)
-    
-    # Setup permissions and users
-    setup_role_permissions()
-    setup_users()
     
     # Import master data
     import_item_groups()
@@ -1018,8 +977,9 @@ def run_master_data_only():
     # Import BOMs only (không xóa)
     import_boms()
     
-    print("\n✅ Hoàn tất import master data!")
-    print("📝 Giao dịch hiện có (Invoice, Stock Entry, Payment...) được giữ nguyên")
+    print("\n" + "="*60)
+    print("✅ HOÀN TẤT IMPORT MASTER DATA!")
+    print("="*60)
 
 
 def run_accounting_setup():
@@ -1031,5 +991,7 @@ def run_accounting_setup():
     setup_accounts()
     setup_mode_of_payment_accounts()
     
-    print("\n✅ Hoàn tất!")
+    print("\n" + "="*60)
+    print("✅ HOÀN TẤT!")
+    print("="*60)
 

@@ -23,28 +23,42 @@
       </div>
 
       <!-- Navigation -->
-      <nav class="p-4 space-y-1 flex-1 overflow-y-auto">
-        <router-link
-          v-for="item in menuItems"
-          :key="item.path"
-          :to="item.path"
-          custom
-          v-slot="{ isExactActive, href, navigate }"
-        >
-          <a
-            :href="href"
-            @click="navigate"
-            :class="[
-              'flex items-center gap-3 px-4 py-3 rounded-lg transition-colors',
-              isExactActive 
-                ? 'bg-white/15 text-white' 
-                : 'text-white/70 hover:bg-white/10 hover:text-white'
-            ]"
-          >
-            <component :is="item.icon" class="w-5 h-5" />
-            <span class="font-medium">{{ item.label }}</span>
-          </a>
-        </router-link>
+      <nav class="p-4 flex-1 overflow-y-auto">
+        <!-- Menu sections with dividers -->
+        <template v-for="(section, sectionIndex) in menuSections" :key="sectionIndex">
+          <!-- Section divider (except first) -->
+          <div v-if="sectionIndex > 0" class="my-3 border-t border-white/10"></div>
+          
+          <!-- Section label (optional) -->
+          <div v-if="section.label" class="px-4 py-2 text-xs font-semibold text-white/40 uppercase tracking-wider">
+            {{ section.label }}
+          </div>
+          
+          <!-- Section items -->
+          <div class="space-y-1">
+            <router-link
+              v-for="item in section.items"
+              :key="item.path"
+              :to="item.path"
+              custom
+              v-slot="{ isExactActive, href, navigate }"
+            >
+              <a
+                :href="href"
+                @click="navigate"
+                :class="[
+                  'flex items-center gap-3 px-4 py-2.5 rounded-lg transition-colors',
+                  isExactActive 
+                    ? 'bg-white/15 text-white' 
+                    : 'text-white/70 hover:bg-white/10 hover:text-white'
+                ]"
+              >
+                <component :is="item.icon" class="w-5 h-5" />
+                <span class="font-medium text-sm">{{ item.label }}</span>
+              </a>
+            </router-link>
+          </div>
+        </template>
       </nav>
 
       <!-- User Info (Bottom) -->
@@ -99,28 +113,6 @@
 
         <!-- Spacer -->
         <div class="flex-1"></div>
-
-        <!-- Header Actions -->
-        <div class="flex items-center gap-2">
-          <!-- Notifications -->
-          <button class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg relative">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                    d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-            </svg>
-            <!-- Badge -->
-            <span class="absolute top-1 right-1 w-2 h-2 bg-error rounded-full"></span>
-          </button>
-
-          <!-- Quick Settings -->
-          <button class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                    d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-          </button>
-        </div>
       </header>
 
       <!-- Page Content -->
@@ -157,146 +149,151 @@ const userRole = computed(() => {
 })
 
 // Menu Items with inline SVG icons as render functions
-const menuItems = [
+// Icons
+const HomeIcon = {
+  render: () => h('svg', { fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' }, [
+    h('path', { 
+      'stroke-linecap': 'round', 
+      'stroke-linejoin': 'round', 
+      'stroke-width': '2',
+      d: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6'
+    })
+  ])
+}
+
+const ListIcon = {
+  render: () => h('svg', { fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' }, [
+    h('path', { 
+      'stroke-linecap': 'round', 
+      'stroke-linejoin': 'round', 
+      'stroke-width': '2',
+      d: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01'
+    })
+  ])
+}
+
+const ReceiptIcon = {
+  render: () => h('svg', { fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' }, [
+    h('path', { 
+      'stroke-linecap': 'round', 
+      'stroke-linejoin': 'round', 
+      'stroke-width': '2',
+      d: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4'
+    })
+  ])
+}
+
+const IssueIcon = {
+  render: () => h('svg', { fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' }, [
+    h('path', { 
+      'stroke-linecap': 'round', 
+      'stroke-linejoin': 'round', 
+      'stroke-width': '2',
+      d: 'M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4'
+    })
+  ])
+}
+
+const ManufactureIcon = {
+  render: () => h('svg', { fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' }, [
+    h('path', { 
+      'stroke-linecap': 'round', 
+      'stroke-linejoin': 'round', 
+      'stroke-width': '2',
+      d: 'M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z'
+    })
+  ])
+}
+
+const PurchaseIcon = {
+  render: () => h('svg', { fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' }, [
+    h('path', { 
+      'stroke-linecap': 'round', 
+      'stroke-linejoin': 'round', 
+      'stroke-width': '2',
+      d: 'M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z'
+    })
+  ])
+}
+
+const SellIcon = {
+  render: () => h('svg', { fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' }, [
+    h('path', { 
+      'stroke-linecap': 'round', 
+      'stroke-linejoin': 'round', 
+      'stroke-width': '2',
+      d: 'M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z'
+    })
+  ])
+}
+
+const WarehouseIcon = {
+  render: () => h('svg', { fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' }, [
+    h('path', { 
+      'stroke-linecap': 'round', 
+      'stroke-linejoin': 'round', 
+      'stroke-width': '2',
+      d: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4'
+    })
+  ])
+}
+
+const ProductIcon = {
+  render: () => h('svg', { fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' }, [
+    h('path', { 
+      'stroke-linecap': 'round', 
+      'stroke-linejoin': 'round', 
+      'stroke-width': '2',
+      d: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4'
+    })
+  ])
+}
+
+const BOMIcon = {
+  render: () => h('svg', { fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' }, [
+    h('path', { 
+      'stroke-linecap': 'round', 
+      'stroke-linejoin': 'round', 
+      'stroke-width': '2',
+      d: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4'
+    })
+  ])
+}
+
+// Menu sections for organized navigation
+const menuSections = [
   {
-    path: '/',
-    label: 'Tổng quan',
-    icon: {
-      render: () => h('svg', { fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' }, [
-        h('path', { 
-          'stroke-linecap': 'round', 
-          'stroke-linejoin': 'round', 
-          'stroke-width': '2',
-          d: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6'
-        })
-      ])
-    }
+    // Tổng quan
+    items: [
+      { path: '/', label: 'Tổng quan', icon: HomeIcon }
+    ]
   },
   {
-    path: '/purchasing/invoices',
-    label: 'Hóa đơn mua',
-    icon: {
-      render: () => h('svg', { fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' }, [
-        h('path', { 
-          'stroke-linecap': 'round', 
-          'stroke-linejoin': 'round', 
-          'stroke-width': '2',
-          d: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'
-        })
-      ])
-    }
+    // Phiếu kho
+    label: 'Kho',
+    items: [
+      { path: '/stock/entries', label: 'Danh sách phiếu', icon: ListIcon },
+      { path: '/stock/receipt', label: 'Nhập kho', icon: ReceiptIcon },
+      { path: '/stock/issue', label: 'Xuất kho', icon: IssueIcon },
+      { path: '/production/orders', label: 'Lệnh sản xuất', icon: ManufactureIcon }
+    ]
   },
   {
-    path: '/selling/invoices',
-    label: 'Hóa đơn bán',
-    icon: {
-      render: () => h('svg', { fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' }, [
-        h('path', { 
-          'stroke-linecap': 'round', 
-          'stroke-linejoin': 'round', 
-          'stroke-width': '2',
-          d: 'M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z'
-        })
-      ])
-    }
+    // Mua bán
+    label: 'Giao dịch',
+    items: [
+      { path: '/purchasing/invoices', label: 'Hóa đơn mua', icon: PurchaseIcon },
+      { path: '/selling/invoices', label: 'Hóa đơn bán', icon: SellIcon }
+    ]
   },
   {
-    path: '/stock/receipt',
-    label: 'Nhập kho',
-    icon: {
-      render: () => h('svg', { fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' }, [
-        h('path', { 
-          'stroke-linecap': 'round', 
-          'stroke-linejoin': 'round', 
-          'stroke-width': '2',
-          d: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4'
-        })
-      ])
-    }
-  },
-  {
-    path: '/stock/issue',
-    label: 'Xuất kho',
-    icon: {
-      render: () => h('svg', { fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' }, [
-        h('path', { 
-          'stroke-linecap': 'round', 
-          'stroke-linejoin': 'round', 
-          'stroke-width': '2',
-          d: 'M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4'
-        })
-      ])
-    }
-  },
-  {
-    path: '/stock/warehouses',
-    label: 'Quản lý kho',
-    icon: {
-      render: () => h('svg', { fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' }, [
-        h('path', { 
-          'stroke-linecap': 'round', 
-          'stroke-linejoin': 'round', 
-          'stroke-width': '2',
-          d: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4'
-        })
-      ])
-    }
-  },
-  {
-    path: '/production/boms',
-    label: 'Định mức NVL',
-    icon: {
-      render: () => h('svg', { fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' }, [
-        h('path', { 
-          'stroke-linecap': 'round', 
-          'stroke-linejoin': 'round', 
-          'stroke-width': '2',
-          d: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4'
-        })
-      ])
-    }
-  },
-  {
-    path: '/production/orders',
-    label: 'Lệnh sản xuất',
-    icon: {
-      render: () => h('svg', { fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' }, [
-        h('path', { 
-          'stroke-linecap': 'round', 
-          'stroke-linejoin': 'round', 
-          'stroke-width': '2',
-          d: 'M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z'
-        })
-      ])
-    }
-  },
-  {
-    path: '/stock/entries',
-    label: 'Danh sách phiếu',
-    icon: {
-      render: () => h('svg', { fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' }, [
-        h('path', { 
-          'stroke-linecap': 'round', 
-          'stroke-linejoin': 'round', 
-          'stroke-width': '2',
-          d: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01'
-        })
-      ])
-    }
-  },
-  {
-    path: '/master/items',
-    label: 'Sản phẩm',
-    icon: {
-      render: () => h('svg', { fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' }, [
-        h('path', { 
-          'stroke-linecap': 'round', 
-          'stroke-linejoin': 'round', 
-          'stroke-width': '2',
-          d: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4'
-        })
-      ])
-    }
+    // Danh mục
+    label: 'Danh mục',
+    items: [
+      { path: '/stock/warehouses', label: 'Quản lý kho', icon: WarehouseIcon },
+      { path: '/master/items', label: 'Sản phẩm', icon: ProductIcon },
+      { path: '/production/boms', label: 'Định mức NVL', icon: BOMIcon }
+    ]
   }
 ]
 

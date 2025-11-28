@@ -1,11 +1,17 @@
 /**
  * User Store
  * Manages authentication state and user info
+ * 
+ * Session-based auth: User must re-login when browser is closed
+ * Uses sessionStorage to persist state only within browser session
  */
 
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { authAPI } from '@/api'
+
+// Session storage key
+const SESSION_KEY = 'xuanhoa_session'
 
 export const useUserStore = defineStore('user', () => {
   // ==================== STATE ====================
@@ -16,11 +22,50 @@ export const useUserStore = defineStore('user', () => {
   const isLoading = ref(false)
   const error = ref(null)
   const initialized = ref(false)  // Track if init has been called
+  const sessionValid = ref(false) // Track if session is valid in this browser session
   let initPromise = null  // Promise to handle concurrent init calls
+
+  // ==================== SESSION HELPERS ====================
+  
+  /**
+   * Check if we have a valid session marker in sessionStorage
+   * This marker is set on successful login and cleared on logout/browser close
+   */
+  function hasSessionMarker() {
+    try {
+      return sessionStorage.getItem(SESSION_KEY) === 'active'
+    } catch {
+      return false
+    }
+  }
+  
+  /**
+   * Set session marker on successful login
+   */
+  function setSessionMarker() {
+    try {
+      sessionStorage.setItem(SESSION_KEY, 'active')
+      sessionValid.value = true
+    } catch (e) {
+      console.warn('[UserStore] Failed to set session marker:', e)
+    }
+  }
+  
+  /**
+   * Clear session marker on logout
+   */
+  function clearSessionMarker() {
+    try {
+      sessionStorage.removeItem(SESSION_KEY)
+      sessionValid.value = false
+    } catch (e) {
+      console.warn('[UserStore] Failed to clear session marker:', e)
+    }
+  }
 
   // ==================== GETTERS ====================
   
-  const isLoggedIn = computed(() => !!user.value && user.value !== 'Guest')
+  const isLoggedIn = computed(() => !!user.value && user.value !== 'Guest' && sessionValid.value)
   
   const isAdmin = computed(() => 
     roles.value.includes('Administrator') || roles.value.includes('System Manager')
@@ -43,9 +88,13 @@ export const useUserStore = defineStore('user', () => {
     
     try {
       await authAPI.login(username, password)
+      // Set session marker BEFORE fetching user
+      setSessionMarker()
       await fetchUser()
       return { success: true }
     } catch (err) {
+      // Clear session marker on failed login
+      clearSessionMarker()
       const message = err.response?.data?.message || 'Đăng nhập thất bại'
       error.value = message
       return { success: false, message }
@@ -65,9 +114,11 @@ export const useUserStore = defineStore('user', () => {
     } catch (err) {
       console.error('Logout error:', err)
     } finally {
+      // Always clear local state and session marker
       user.value = null
       userInfo.value = null
       roles.value = []
+      clearSessionMarker()
       isLoading.value = false
     }
   }
@@ -134,6 +185,10 @@ export const useUserStore = defineStore('user', () => {
   /**
    * Initialize store - call on app mount
    * Returns same promise if called multiple times concurrently
+   * 
+   * Session-based logic:
+   * - If no session marker exists (browser was closed/new tab), user must login
+   * - If session marker exists, verify with server and restore session
    */
   async function init() {
     // Already initialized
@@ -154,7 +209,27 @@ export const useUserStore = defineStore('user', () => {
     // Create and store the promise
     initPromise = (async () => {
       try {
-        await fetchUser()
+        // Check if we have a session marker (browser session still active)
+        if (hasSessionMarker()) {
+          console.log('[UserStore] Session marker found, verifying with server...')
+          sessionValid.value = true
+          await fetchUser()
+          
+          // If server says user is logged in, keep session valid
+          // If server says Guest, clear session (server session expired)
+          if (!user.value || user.value === 'Guest') {
+            console.log('[UserStore] Server session expired, clearing local session')
+            clearSessionMarker()
+          }
+        } else {
+          console.log('[UserStore] No session marker, user must login')
+          // No session marker = new browser session, don't auto-login
+          user.value = null
+          userInfo.value = null
+          roles.value = []
+          sessionValid.value = false
+        }
+        
         console.log('[UserStore] init complete - user:', user.value, 'isLoggedIn:', isLoggedIn.value)
       } finally {
         isLoading.value = false
@@ -174,6 +249,7 @@ export const useUserStore = defineStore('user', () => {
     isLoading,
     error,
     initialized,
+    sessionValid,
     
     // Getters
     isLoggedIn,
