@@ -1,0 +1,13 @@
+role_name,disabled,desk_access,is_custom,two_factor_auth,home_page
+Administrator,0,1,0,0,/app
+System Manager,0,1,0,0,/app
+Stock Manager,0,1,0,0,/app/stock
+Stock User,0,1,0,0,/app/stock
+Manufacturing Manager,0,1,0,0,/app/manufacturing
+Manufacturing User,0,1,0,0,/app/manufacturing
+Purchase Manager,0,1,0,0,/app/buying
+Purchase User,0,1,0,0,/app/buying
+Sales Manager,0,1,0,0,/app/selling
+Sales User,0,1,0,0,/app/selling
+Accounts Manager,0,1,0,0,/app/accounts
+Accounts User,0,1,0,0,/app/accounts

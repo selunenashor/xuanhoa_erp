@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && npm run postbuild",
+    "postbuild": "sed -e 's/<title>frontend<\\/title>/<title>Xuân Hòa Manufacturing<\\/title>/' -e 's/lang=\"en\"/lang=\"vi\"/' ../xuanhoa_app/public/frontend/index.html > ../xuanhoa_app/www/manage.html",
     "preview": "vite preview"
   },
   "dependencies": {

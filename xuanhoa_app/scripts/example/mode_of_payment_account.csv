@@ -1,0 +1,6 @@
+parent,parenttype,parentfield,company,default_account
+Cash,Mode of Payment,accounts,Xuân Hòa Thái Bình,Cash - XHTB
+Wire Transfer,Mode of Payment,accounts,Xuân Hòa Thái Bình,Ngân hàng Quốc tế - XHTB
+Cheque,Mode of Payment,accounts,Xuân Hòa Thái Bình,Ngân hàng Nội địa - XHTB
+Credit Card,Mode of Payment,accounts,Xuân Hòa Thái Bình,Ngân hàng Nội địa - XHTB
+Bank Draft,Mode of Payment,accounts,Xuân Hòa Thái Bình,Ngân hàng Nội địa - XHTB

@@ -1,0 +1,7 @@
+parent,parenttype,parentfield,item_code,item_name,qty,rate,amount,uom,warehouse,expense_account
+PINV-001,Purchase Invoice,items,PCB-DRIVER,Mạch Điều Khiển LED,100,12000,1200000,Cái,Kho Chính - XHTB,Cost of Goods Sold - XHTB
+PINV-001,Purchase Invoice,items,WIRE-COPPER,Dây Đồng,10,50000,500000,Kg,Kho Chính - XHTB,Cost of Goods Sold - XHTB
+PINV-002,Purchase Invoice,items,LED-5W,Bóng LED 5W,200,15000,3000000,Cái,Kho Chính - XHTB,Cost of Goods Sold - XHTB
+PINV-002,Purchase Invoice,items,LED-10W,Bóng LED 10W,150,25000,3750000,Cái,Kho Chính - XHTB,Cost of Goods Sold - XHTB
+PINV-003,Purchase Invoice,items,CAP-ALUMINUM,Thân Nhôm LED,200,8000,1600000,Cái,Kho Chính - XHTB,Cost of Goods Sold - XHTB
+PINV-003,Purchase Invoice,items,HEAT-SINK,Quạt Tỏa Nhiệt,150,5000,750000,Cái,Kho Chính - XHTB,Cost of Goods Sold - XHTB

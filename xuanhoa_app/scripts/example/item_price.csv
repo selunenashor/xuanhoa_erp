@@ -1,0 +1,18 @@
+item_code,price_list,price_list_rate,selling,buying
+LED-5W,Standard Selling,15000,1,0
+LED-5W,Standard Buying,5000,0,1
+LED-10W,Standard Selling,25000,1,0
+LED-10W,Standard Buying,8000,0,1
+CAP-ALUMINUM,Standard Selling,8000,1,0
+CAP-ALUMINUM,Standard Buying,3000,0,1
+HEAT-SINK,Standard Selling,5000,1,0
+HEAT-SINK,Standard Buying,2000,0,1
+PCB-DRIVER,Standard Selling,12000,1,0
+PCB-DRIVER,Standard Buying,5000,0,1
+WIRE-COPPER,Standard Selling,50000,1,0
+WIRE-COPPER,Standard Buying,20000,0,1
+BOX-PAPER,Standard Selling,2000,1,0
+BOX-PAPER,Standard Buying,800,0,1
+LAMP-5W-30LED,Standard Selling,80000,1,0
+LAMP-10W-50LED,Standard Selling,140000,1,0
+SPOTLIGHT-30W,Standard Selling,250000,1,0

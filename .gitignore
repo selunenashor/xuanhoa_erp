@@ -38,8 +38,9 @@ yarn-error.log*
 .bench
 sites/
 
-# Build outputs (keep in repo for deployment, uncomment to ignore)
-# xuanhoa_app/public/frontend/
+# Build outputs - auto generated, ignore in git
+xuanhoa_app/public/frontend/
+!xuanhoa_app/public/frontend/.gitkeep
 
 # Test
 .coverage

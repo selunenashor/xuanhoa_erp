@@ -1,0 +1,7 @@
+Receipt No,Item Code,Item Name,Received Quantity,UOM,Rate,Amount,Warehouse
+PR-001,PCB-DRIVER,Mạch Điều Khiển LED,100,Cái,12000,1200000,Kho Chính - XHTB
+PR-001,WIRE-COPPER,Dây Đồng,10,Kg,50000,500000,Kho Chính - XHTB
+PR-002,LED-5W,Bóng LED 5W,200,Cái,15000,3000000,Kho Chính - XHTB
+PR-002,LED-10W,Bóng LED 10W,150,Cái,25000,3750000,Kho Chính - XHTB
+PR-003,CAP-ALUMINUM,Thân Nhôm LED,200,Cái,8000,1600000,Kho Chính - XHTB
+PR-003,HEAT-SINK,Quạt Tỏa Nhiệt,200,Cái,5000,1000000,Kho Chính - XHTB

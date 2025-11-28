@@ -15,9 +15,34 @@ Xuân Hòa Manufacturing App là một custom Frappe app cung cấp:
 ┌─────────────────────┐         ┌────────────────────────┐
 │   Vue.js Frontend   │   API   │   ERPNext (Backend)    │
 │   (/manage)         │◄───────►│   Stock, Manufacturing │
-│   Tailwind CSS      │  REST   │   Accounts, Setup...   │
+│   Tailwind CSS v4   │  REST   │   Accounts, Setup...   │
 └─────────────────────┘         └────────────────────────┘
 ```
+
+## Tính năng
+
+### Đã hoàn thành ✅
+
+| Module | Tính năng | Mô tả |
+|--------|-----------|-------|
+| **Dashboard** | Tổng quan | KPIs, thao tác nhanh, hoạt động gần đây |
+| **Kho** | Nhập kho | Tạo phiếu nhập nhiều sản phẩm |
+| | Xuất kho | Tạo phiếu xuất nhiều sản phẩm |
+| | Danh sách phiếu | Xem, lọc, tìm kiếm phiếu kho |
+| | Chi tiết phiếu | Xem chi tiết, submit/cancel phiếu |
+| | Quản lý kho | Xem tồn kho theo kho/sản phẩm |
+| **Sản xuất** | Lệnh sản xuất | CRUD, submit, start, complete, cancel |
+| | Định mức NVL | Quản lý BOM (tạo, sửa, xóa) |
+| **Giao dịch** | Hóa đơn mua | CRUD, submit, cancel, thanh toán |
+| | Hóa đơn bán | CRUD, submit, cancel, thanh toán |
+| **Danh mục** | Sản phẩm | CRUD Items, Item Groups |
+| | Kho hàng | Xem danh sách kho |
+
+### Đang phát triển 🚧
+
+- Báo cáo thống kê
+- Quản lý Supplier/Customer  
+- Notification system
 
 ## Yêu cầu hệ thống
 
@@ -36,10 +61,6 @@ Xuân Hòa Manufacturing App là một custom Frappe app cung cấp:
 
 ⚠️ **QUAN TRỌNG**: App này **yêu cầu ERPNext** đã được cài đặt và hoạt động trên site trước khi cài đặt.
 
-- Hướng dẫn cài đặt: https://github.com/frappe/erpnext/
-
-- Hướng dẫn kiểm tra:
-
 ```bash
 # Kiểm tra ERPNext đã cài chưa
 bench --site [your-site] list-apps
@@ -51,37 +72,24 @@ bench --site [your-site] list-apps
 ### Bước 1: Clone repository
 
 ```bash
-cd $PATH_TO_YOUR_BENCH
+cd \$PATH_TO_YOUR_BENCH
 bench get-app git@github.com:selunenashor/xuanhoa_erp.git --branch main
-```
-
-Hoặc sử dụng HTTPS:
-```bash
-bench get-app https://github.com/selunenashor/xuanhoa_erp.git --branch main
 ```
 
 ### Bước 2: Cài đặt app vào site
 
 ```bash
-# Cài vào site có sẵn ERPNext
 bench --site [your-site] install-app xuanhoa_app
-
-# Ví dụ:
-bench --site erpnext.localhost install-app xuanhoa_app
 ```
 
 ### Bước 3: Build frontend assets
 
 ```bash
-# Cài đặt dependencies frontend
 cd apps/xuanhoa_app/frontend
 npm install
-
-# Build production
 npm run build
 
-# Quay lại bench root và build assets
-cd $PATH_TO_YOUR_BENCH
+cd \$PATH_TO_YOUR_BENCH
 bench build --app xuanhoa_app
 ```
 
@@ -89,33 +97,43 @@ bench build --app xuanhoa_app
 
 ```bash
 bench restart
-# Hoặc trong development mode:
-bench start
 ```
 
 ## Truy cập ứng dụng
 
-Sau khi cài đặt thành công:
-
-- **Xuân Hòa App (Frontend)**: `http://[your-site]:8000/manage`
+- **Frontend**: \`http://[your-site]:8000/manage\`
 
 ## Cấu trúc dự án
 
 ```
 xuanhoa_app/
 ├── xuanhoa_app/
-│   ├── api.py              # API endpoints cho frontend
-│   ├── hooks.py            # Cấu hình Frappe app
+│   ├── api.py                # API endpoints cho frontend
+│   ├── hooks.py              # Cấu hình Frappe app
+│   ├── scripts/              # Scripts import data mẫu
+│   │   ├── reset_all_data.py
+│   │   ├── import_data.py
+│   │   └── example/          # CSV data files
 │   ├── public/
-│   │   └── frontend/       # Vue.js build output
+│   │   └── frontend/         # Vue.js build output
 │   └── www/
-│       └── manage.html     # SPA entry point
-├── frontend/               # Vue.js source code
+│       └── manage.html       # SPA entry point
+├── frontend/                 # Vue.js source code
 │   ├── src/
-│   │   ├── api/            # API client (axios)
-│   │   ├── pages/          # Page components
-│   │   ├── router/         # Vue Router
-│   │   └── stores/         # Pinia stores
+│   │   ├── api/              # API modules (modular)
+│   │   │   ├── client.js     # Axios instance
+│   │   │   ├── auth.js       # Authentication
+│   │   │   ├── stock.js      # Stock operations
+│   │   │   ├── production.js # Work Orders, BOMs
+│   │   │   ├── invoice.js    # Purchase/Sales invoices
+│   │   │   ├── master.js     # Items, Suppliers, Customers
+│   │   │   ├── dashboard.js  # Dashboard KPIs
+│   │   │   └── index.js      # Re-exports
+│   │   ├── components/       # Reusable components
+│   │   │   └── layouts/      # MainLayout
+│   │   ├── pages/            # Page components
+│   │   ├── router/           # Vue Router
+│   │   └── stores/           # Pinia stores
 │   ├── package.json
 │   └── vite.config.js
 ├── pyproject.toml
@@ -128,7 +146,7 @@ xuanhoa_app/
 
 **Terminal 1** - Frappe Backend:
 ```bash
-cd $PATH_TO_YOUR_BENCH
+cd \$PATH_TO_YOUR_BENCH
 bench start
 ```
 
@@ -138,18 +156,48 @@ cd apps/xuanhoa_app/frontend
 npm run dev
 ```
 
-Truy cập frontend dev server tại: `http://localhost:5173`
-
-### Code formatting
-
-App này sử dụng `pre-commit` để kiểm tra và format code:
+### Build production
 
 ```bash
-cd apps/xuanhoa_app
-pre-commit install
+cd apps/xuanhoa_app/frontend
+npm run build
 ```
 
-Các công cụ được sử dụng:
-- **ruff** - Python linter và formatter
-- **eslint** - JavaScript/Vue linter
-- **prettier** - Code formatter
+## Dữ liệu mẫu
+
+Xem hướng dẫn chi tiết tại: [scripts/README.md](./xuanhoa_app/scripts/README.md)
+
+### Quick Start
+
+```bash
+# Setup toàn bộ dữ liệu mẫu (1 lệnh)
+bench --site erpnext.localhost execute xuanhoa_app.scripts.reset_all_data.setup_all
+```
+
+### Users mặc định
+
+| Email | Password | Role |
+|-------|----------|------|
+| admin@xuanhoa.local | admin123 | System Manager |
+| admin2@xuanhoa.local | admin123 | System Manager |
+
+## Tech Stack
+
+### Frontend
+- **Vue.js 3** - Composition API
+- **Tailwind CSS v4** - Utility-first CSS
+- **Vite** - Build tool
+- **Vue Router** - Client-side routing
+- **Pinia** - State management
+- **Axios** - HTTP client
+
+### Backend
+- **Frappe Framework v15**
+- **ERPNext v15**
+- **Python 3.12**
+- **MariaDB**
+- **Redis**
+
+## License
+
+MIT

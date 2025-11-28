@@ -1,0 +1,65 @@
+doctype,role,read,write,create,delete,submit,cancel,amend,report,export,import,share,print,email
+Stock Entry,System Manager,1,1,1,1,1,1,1,1,1,1,1,1,1
+Stock Entry,Stock Manager,1,1,1,1,1,1,1,1,1,1,1,1,1
+Stock Entry,Stock User,1,1,1,0,1,0,0,1,1,0,0,1,1
+Stock Entry,Manufacturing Manager,1,1,1,1,1,1,1,1,1,1,1,1,1
+Stock Entry,Manufacturing User,1,1,1,0,1,0,0,1,1,0,0,1,1
+Work Order,System Manager,1,1,1,1,1,1,1,1,1,1,1,1,1
+Work Order,Manufacturing Manager,1,1,1,1,1,1,1,1,1,1,1,1,1
+Work Order,Manufacturing User,1,1,1,0,1,0,0,1,1,0,0,1,1
+Work Order,Stock Manager,1,1,0,0,0,0,0,1,1,0,0,1,0
+BOM,System Manager,1,1,1,1,1,1,1,1,1,1,1,1,1
+BOM,Manufacturing Manager,1,1,1,1,1,1,1,1,1,1,1,1,1
+BOM,Manufacturing User,1,1,1,0,1,0,0,1,1,0,0,1,1
+Purchase Receipt,System Manager,1,1,1,1,1,1,1,1,1,1,1,1,1
+Purchase Receipt,Stock Manager,1,1,1,1,1,1,1,1,1,1,1,1,1
+Purchase Receipt,Stock User,1,1,1,0,1,0,0,1,1,0,0,1,1
+Purchase Receipt,Purchase Manager,1,1,1,1,1,1,1,1,1,1,1,1,1
+Purchase Receipt,Purchase User,1,1,1,0,1,0,0,1,1,0,0,1,1
+Purchase Invoice,System Manager,1,1,1,1,1,1,1,1,1,1,1,1,1
+Purchase Invoice,Accounts Manager,1,1,1,1,1,1,1,1,1,1,1,1,1
+Purchase Invoice,Accounts User,1,1,1,0,1,0,0,1,1,0,0,1,1
+Purchase Invoice,Purchase Manager,1,1,1,1,1,1,1,1,1,1,1,1,1
+Purchase Invoice,Purchase User,1,1,1,0,1,0,0,1,1,0,0,1,1
+Delivery Note,System Manager,1,1,1,1,1,1,1,1,1,1,1,1,1
+Delivery Note,Stock Manager,1,1,1,1,1,1,1,1,1,1,1,1,1
+Delivery Note,Stock User,1,1,1,0,1,0,0,1,1,0,0,1,1
+Delivery Note,Sales Manager,1,1,1,1,1,1,1,1,1,1,1,1,1
+Delivery Note,Sales User,1,1,1,0,1,0,0,1,1,0,0,1,1
+Sales Invoice,System Manager,1,1,1,1,1,1,1,1,1,1,1,1,1
+Sales Invoice,Accounts Manager,1,1,1,1,1,1,1,1,1,1,1,1,1
+Sales Invoice,Accounts User,1,1,1,0,1,0,0,1,1,0,0,1,1
+Sales Invoice,Sales Manager,1,1,1,1,1,1,1,1,1,1,1,1,1
+Sales Invoice,Sales User,1,1,1,0,1,0,0,1,1,0,0,1,1
+Payment Entry,System Manager,1,1,1,1,1,1,1,1,1,1,1,1,1
+Payment Entry,Accounts Manager,1,1,1,1,1,1,1,1,1,1,1,1,1
+Payment Entry,Accounts User,1,1,1,0,1,0,0,1,1,0,0,1,1
+Payment Entry,Purchase Manager,1,1,1,0,1,0,0,1,1,0,0,1,1
+Payment Entry,Sales Manager,1,1,1,0,1,0,0,1,1,0,0,1,1
+Item,System Manager,1,1,1,1,0,0,0,1,1,1,1,1,1
+Item,Stock Manager,1,1,1,1,0,0,0,1,1,1,1,1,1
+Item,Stock User,1,0,0,0,0,0,0,1,1,0,0,1,0
+Item,Manufacturing Manager,1,1,1,0,0,0,0,1,1,0,1,1,1
+Item,Purchase Manager,1,1,1,0,0,0,0,1,1,0,1,1,1
+Item,Sales Manager,1,1,1,0,0,0,0,1,1,0,1,1,1
+Warehouse,System Manager,1,1,1,1,0,0,0,1,1,1,1,1,1
+Warehouse,Stock Manager,1,1,1,0,0,0,0,1,1,0,1,1,1
+Warehouse,Stock User,1,0,0,0,0,0,0,1,1,0,0,1,0
+Supplier,System Manager,1,1,1,1,0,0,0,1,1,1,1,1,1
+Supplier,Purchase Manager,1,1,1,1,0,0,0,1,1,1,1,1,1
+Supplier,Purchase User,1,1,1,0,0,0,0,1,1,0,0,1,1
+Customer,System Manager,1,1,1,1,0,0,0,1,1,1,1,1,1
+Customer,Sales Manager,1,1,1,1,0,0,0,1,1,1,1,1,1
+Customer,Sales User,1,1,1,0,0,0,0,1,1,0,0,1,1
+Item Group,System Manager,1,1,1,1,0,0,0,1,1,1,1,1,1
+Item Group,Stock Manager,1,1,1,1,0,0,0,1,1,1,1,1,1
+Item Group,Manufacturing Manager,1,1,1,0,0,0,0,1,1,0,1,1,1
+Item Group,Purchase Manager,1,1,1,0,0,0,0,1,1,0,1,1,1
+Item Group,Sales Manager,1,1,1,0,0,0,0,1,1,0,1,1,1
+Item Price,System Manager,1,1,1,1,0,0,0,1,1,1,1,1,1
+Item Price,Stock Manager,1,1,1,1,0,0,0,1,1,1,1,1,1
+Item Price,Purchase Manager,1,1,1,1,0,0,0,1,1,0,1,1,1
+Item Price,Sales Manager,1,1,1,1,0,0,0,1,1,0,1,1,1
+Item Price,Accounts Manager,1,1,1,0,0,0,0,1,1,0,1,1,1
+UOM,System Manager,1,1,1,1,0,0,0,1,1,1,1,1,1
+UOM,Stock Manager,1,1,1,0,0,0,0,1,1,0,1,1,1

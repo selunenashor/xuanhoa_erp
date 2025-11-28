@@ -1,0 +1,6 @@
+mode_of_payment,enabled,type
+Cash,1,Cash
+Wire Transfer,1,Bank
+Cheque,1,Bank
+Credit Card,1,Bank
+Bank Draft,1,Bank

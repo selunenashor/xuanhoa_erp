@@ -1,0 +1,4 @@
+parent,parenttype,parentfield,item_code,item_name,qty,rate,amount,uom,warehouse,income_account
+SINV-001,Sales Invoice,items,LAMP-10W-50LED,Đèn LED 10W (50 LED),5,140000,700000,Cái,Kho Thành Phẩm - XHTB,Sales - XHTB
+SINV-002,Sales Invoice,items,LAMP-10W-50LED,Đèn LED 10W (50 LED),20,140000,2800000,Cái,Kho Thành Phẩm - XHTB,Sales - XHTB
+SINV-003,Sales Invoice,items,LAMP-10W-50LED,Đèn LED 10W (50 LED),10,140000,1400000,Cái,Kho Thành Phẩm - XHTB,Sales - XHTB

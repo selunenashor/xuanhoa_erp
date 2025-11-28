@@ -1,0 +1,16 @@
+parent,parenttype,parentfield,role
+admin@xuanhoa.local,User,roles,System Manager
+admin1@xuanhoa.local,User,roles,System Manager
+kho@xuanhoa.local,User,roles,Stock Manager
+kho@xuanhoa.local,User,roles,Stock User
+sanxuat@xuanhoa.local,User,roles,Manufacturing Manager
+sanxuat@xuanhoa.local,User,roles,Manufacturing User
+sanxuat@xuanhoa.local,User,roles,Stock User
+muahang@xuanhoa.local,User,roles,Purchase Manager
+muahang@xuanhoa.local,User,roles,Purchase User
+muahang@xuanhoa.local,User,roles,Stock User
+banhang@xuanhoa.local,User,roles,Sales Manager
+banhang@xuanhoa.local,User,roles,Sales User
+banhang@xuanhoa.local,User,roles,Stock User
+ketoan@xuanhoa.local,User,roles,Accounts Manager
+ketoan@xuanhoa.local,User,roles,Accounts User

@@ -1,0 +1,8 @@
+Item Group Name,Parent Item Group,Is Group
+Nguyên Vật Liệu,,1
+Linh Kiện Điện,Nguyên Vật Liệu,0
+Linh Kiện Cơ Khí,Nguyên Vật Liệu,0
+Vật Liệu Đóng Gói,Nguyên Vật Liệu,0
+Thành Phẩm,,1
+Bóng Đèn LED,Thành Phẩm,0
+Đèn Chiếu Sáng,Thành Phẩm,0
