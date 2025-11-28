@@ -15,19 +15,109 @@
             </router-link>
             <div>
               <h1 class="text-2xl font-bold text-gray-900">Tạo lệnh sản xuất</h1>
-              <p class="text-gray-600">Tạo lệnh sản xuất mới từ BOM</p>
+              <p class="text-gray-600">Chọn sản phẩm và BOM để tạo lệnh sản xuất</p>
             </div>
           </div>
         </div>
 
         <!-- Form -->
         <form @submit.prevent="submitForm" class="space-y-6">
-          <!-- BOM Selection -->
+          <!-- Product & BOM Selection -->
           <div class="bg-white rounded-lg shadow p-6">
-            <h2 class="text-lg font-semibold text-gray-900 mb-4">Chọn sản phẩm</h2>
+            <h2 class="text-lg font-semibold text-gray-900 mb-4">Chọn sản phẩm & BOM</h2>
             
-            <!-- BOM Selector -->
-            <div class="mb-4">
+            <!-- Product Selector with Autocomplete -->
+            <div class="mb-4 relative">
+              <label class="block text-sm font-medium text-gray-700 mb-1">
+                Sản phẩm <span class="text-red-500">*</span>
+              </label>
+              <div class="relative">
+                <input
+                  type="text"
+                  v-model="productSearch"
+                  @input="onProductSearch"
+                  @focus="showProductDropdown = true"
+                  @blur="hideProductDropdown"
+                  placeholder="Nhập mã hoặc tên sản phẩm..."
+                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                />
+                <!-- Clear button -->
+                <button 
+                  v-if="form.item" 
+                  type="button"
+                  @mousedown.prevent="clearProduct"
+                  class="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              
+              <!-- Product Dropdown -->
+              <div 
+                v-if="showProductDropdown && filteredProducts.length > 0"
+                class="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto"
+              >
+                <div
+                  v-for="product in filteredProducts"
+                  :key="product.item_code"
+                  @mousedown.prevent="selectProduct(product)"
+                  class="px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                >
+                  <div class="font-medium text-gray-900">{{ product.item_code }}</div>
+                  <div class="text-sm text-gray-500">{{ product.item_name }}</div>
+                </div>
+              </div>
+              
+              <!-- No results -->
+              <div 
+                v-if="showProductDropdown && productSearch && filteredProducts.length === 0"
+                class="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-3 text-center text-gray-500"
+              >
+                Không tìm thấy sản phẩm
+              </div>
+              
+              <!-- Selected product display -->
+              <div v-if="form.item && selectedProduct" class="mt-2 p-2 bg-primary/5 border border-primary/20 rounded-lg">
+                <div class="flex items-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span class="font-medium text-gray-900">{{ selectedProduct.item_code }}</span>
+                  <span class="text-gray-500">-</span>
+                  <span class="text-gray-700">{{ selectedProduct.item_name }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- No BOM Warning -->
+            <div v-if="form.item && !loadingBOMs && productBOMs.length === 0" class="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <div class="flex items-start gap-3">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-red-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <div>
+                  <h4 class="font-medium text-red-800">Sản phẩm chưa có BOM</h4>
+                  <p class="text-sm text-red-600 mt-1">
+                    Sản phẩm này chưa được tạo định mức sản xuất (BOM). 
+                    Vui lòng <router-link to="/production/boms" class="underline font-medium hover:text-red-800">tạo BOM</router-link> trước khi tạo lệnh sản xuất.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Loading BOMs -->
+            <div v-if="loadingBOMs" class="mb-4 flex items-center gap-2 text-gray-500">
+              <svg class="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <span>Đang tải danh sách BOM...</span>
+            </div>
+
+            <!-- BOM Selector (Select dropdown) -->
+            <div v-if="form.item && productBOMs.length > 0" class="mb-4">
               <label class="block text-sm font-medium text-gray-700 mb-1">
                 Định mức sản xuất (BOM) <span class="text-red-500">*</span>
               </label>
@@ -38,11 +128,13 @@
                 class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
               >
                 <option value="">-- Chọn BOM --</option>
-                <option v-for="bom in boms" :key="bom.name" :value="bom.name">
-                  {{ bom.item }} - {{ bom.item_name }} ({{ bom.name }})
-                  <template v-if="bom.is_default"> ⭐</template>
+                <option v-for="bom in productBOMs" :key="bom.name" :value="bom.name">
+                  {{ bom.name }} {{ bom.is_default ? '⭐' : '' }} - {{ bom.item_count }} NVL - {{ formatNumber(bom.raw_material_cost || bom.total_cost) }} VND/{{ translateUOM(bom.uom) }}
                 </option>
               </select>
+              <p v-if="productBOMs.length > 1" class="text-xs text-gray-500 mt-1">
+                Có {{ productBOMs.length }} BOM cho sản phẩm này. ⭐ = BOM mặc định
+              </p>
             </div>
 
             <!-- Selected BOM Info -->
@@ -64,8 +156,8 @@
                   </div>
                 </div>
                 <div class="text-right">
-                  <div class="text-sm text-gray-500">Chi phí/đơn vị</div>
-                  <div class="font-semibold text-gray-900">{{ formatNumber(selectedBOM.total_cost) }} VND</div>
+                  <div class="text-sm text-gray-500">Chi phí NVL/đơn vị</div>
+                  <div class="font-semibold text-gray-900">{{ formatNumber(selectedBOM.raw_material_cost || selectedBOM.total_cost) }} VND</div>
                 </div>
               </div>
 
@@ -260,12 +352,20 @@ const translateUOM = (uom) => UOM_TRANSLATIONS[uom] || uom || ''
 
 // State
 const loading = ref(false)
-const boms = ref([])
+const loadingBOMs = ref(false)
+const products = ref([])
+const productBOMs = ref([])
 const bomItems = ref([])
 const warehouses = ref([])
 const selectedBOM = ref(null)
+const selectedProduct = ref(null)
+
+// Product search autocomplete
+const productSearch = ref('')
+const showProductDropdown = ref(false)
 
 const form = reactive({
+  item: '',
   bom_no: '',
   qty: 1,
   planned_start_date: new Date().toISOString().split('T')[0],
@@ -280,7 +380,18 @@ const toast = reactive({ show: false, type: 'success', message: '' })
 
 // Computed
 const canSubmit = computed(() => {
-  return form.bom_no && form.qty > 0 && form.source_warehouse && form.wip_warehouse && form.fg_warehouse
+  return form.item && form.bom_no && form.qty > 0 && form.source_warehouse && form.wip_warehouse && form.fg_warehouse
+})
+
+// Filtered products for autocomplete
+const filteredProducts = computed(() => {
+  if (!productSearch.value) return products.value.slice(0, 20) // Show first 20 when empty
+  
+  const search = productSearch.value.toLowerCase()
+  return products.value.filter(p => 
+    p.item_code.toLowerCase().includes(search) || 
+    (p.item_name && p.item_name.toLowerCase().includes(search))
+  ).slice(0, 20) // Limit to 20 results
 })
 
 // Methods
@@ -296,12 +407,76 @@ const showToast = (type, message) => {
   setTimeout(() => { toast.show = false }, 3000)
 }
 
-const loadBOMs = async () => {
+const loadProducts = async () => {
   try {
-    boms.value = await workOrderAPI.getBOMs()
+    // Lấy danh sách sản phẩm (thành phẩm có thể sản xuất)
+    const res = await stockAPI.getItems()
+    // Lọc sản phẩm có thể sản xuất (có BOM hoặc là thành phẩm)
+    products.value = res || []
+  } catch (error) {
+    console.error('Error loading products:', error)
+    showToast('error', 'Không thể tải danh sách sản phẩm')
+  }
+}
+
+// Product autocomplete handlers
+const onProductSearch = () => {
+  showProductDropdown.value = true
+}
+
+const hideProductDropdown = () => {
+  // Delay để cho phép click vào item
+  setTimeout(() => {
+    showProductDropdown.value = false
+  }, 200)
+}
+
+const selectProduct = async (product) => {
+  form.item = product.item_code
+  selectedProduct.value = product
+  productSearch.value = `${product.item_code} - ${product.item_name}`
+  showProductDropdown.value = false
+  
+  // Load BOMs for selected product
+  await onProductChange()
+}
+
+const clearProduct = () => {
+  form.item = ''
+  selectedProduct.value = null
+  productSearch.value = ''
+  form.bom_no = ''
+  selectedBOM.value = null
+  bomItems.value = []
+  productBOMs.value = []
+}
+
+const onProductChange = async () => {
+  // Reset BOM selection
+  form.bom_no = ''
+  selectedBOM.value = null
+  bomItems.value = []
+  productBOMs.value = []
+  
+  if (!form.item) return
+  
+  loadingBOMs.value = true
+  try {
+    // Lấy danh sách BOM cho sản phẩm đã chọn
+    const boms = await workOrderAPI.getBOMs(form.item)
+    productBOMs.value = boms || []
+    
+    // Tự động chọn BOM mặc định nếu có
+    const defaultBOM = productBOMs.value.find(b => b.is_default)
+    if (defaultBOM) {
+      form.bom_no = defaultBOM.name
+      await onBOMChange()
+    }
   } catch (error) {
     console.error('Error loading BOMs:', error)
-    showToast('error', 'Không thể tải danh sách BOM')
+    productBOMs.value = []
+  } finally {
+    loadingBOMs.value = false
   }
 }
 
@@ -391,7 +566,7 @@ const submitForm = async () => {
 
 // Initialize
 onMounted(() => {
-  loadBOMs()
+  loadProducts()
   loadWarehouses()
 })
 </script>

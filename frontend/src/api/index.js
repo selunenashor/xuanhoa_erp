@@ -262,14 +262,15 @@ export const workOrderAPI = {
    * Get list of BOMs for selection
    * @param {string|null} itemCode - Filter by item
    * @param {boolean} isActive - Only active BOMs
-   * @param {boolean} isDefault - Only default BOMs
+   * @param {boolean} isDefault - Only default BOMs (true = only default, false/null = all)
    */
-  getBOMs: async (itemCode = null, isActive = true, isDefault = false) => {
-    const res = await api.post('/method/xuanhoa_app.api.get_boms', { 
-      item_code: itemCode,
-      is_active: isActive ? 1 : 0,
-      is_default: isDefault ? 1 : 0
-    })
+  getBOMs: async (itemCode = null, isActive = true, isDefault = null) => {
+    const params = {}
+    if (itemCode) params.item_code = itemCode
+    if (isActive) params.is_active = 1
+    if (isDefault) params.is_default = 1  // Chỉ gửi khi muốn filter mặc định
+    
+    const res = await api.post('/method/xuanhoa_app.api.get_boms', params)
     return res.data.message
   },
 
@@ -348,23 +349,6 @@ export const dashboardAPI = {
   getRecentActivities: async (limit = 10) => {
     const res = await api.post('/method/xuanhoa_app.api.get_recent_activities', { limit })
     return res.data.message
-  }
-}
-
-// ==================== ITEM APIs ====================
-
-export const itemAPI = {
-  /**
-   * Get list of items with optional search
-   * @param {Object} params - { search, page_size }
-   */
-  getList: async (params = {}) => {
-    const res = await api.post('/method/xuanhoa_app.api.search_items', { 
-      query: params.search || '',
-      item_group: params.item_group || null,
-      warehouse: params.warehouse || null
-    })
-    return { success: true, data: res.data.message || [] }
   }
 }
 
@@ -597,6 +581,250 @@ export const paymentAPI = {
    */
   getModes: async () => {
     const res = await api.post('/method/xuanhoa_app.api.get_mode_of_payments')
+    return res.data.message
+  }
+}
+
+// ==================== BOM APIs ====================
+
+export const bomAPI = {
+  /**
+   * Get list of BOMs
+   * @param {Object} params - { item, is_active, is_default, search, page, page_size }
+   */
+  getList: async (params = {}) => {
+    const res = await api.post('/method/xuanhoa_app.api.get_all_boms', params)
+    return res.data.message
+  },
+
+  /**
+   * Get BOM detail with items
+   * @param {string} name - BOM ID
+   */
+  getDetail: async (name) => {
+    const res = await api.post('/method/xuanhoa_app.api.get_bom_detail', { bom_no: name })
+    return res.data.message
+  },
+
+  /**
+   * Create new BOM
+   * @param {Object} data - { item, quantity, uom, is_active, is_default, items }
+   */
+  create: async (data) => {
+    const res = await api.post('/method/xuanhoa_app.api.create_bom', {
+      item: data.item,
+      quantity: data.quantity,
+      uom: data.uom,
+      is_active: data.is_active,
+      is_default: data.is_default,
+      items: JSON.stringify(data.items)
+    })
+    return res.data.message
+  },
+
+  /**
+   * Update existing BOM
+   * @param {string} name - BOM ID
+   * @param {Object} data - { is_active, is_default, quantity, items }
+   */
+  update: async (name, data) => {
+    const params = {
+      bom_name: name,
+      is_active: data.is_active,
+      is_default: data.is_default
+    }
+    // Nếu có items thì gửi kèm để update
+    if (data.items && data.items.length > 0) {
+      params.quantity = data.quantity
+      params.items = JSON.stringify(data.items)
+    }
+    const res = await api.post('/method/xuanhoa_app.api.update_bom', params)
+    return res.data.message
+  },
+
+  /**
+   * Delete BOM
+   * @param {string} name - BOM ID
+   */
+  delete: async (name) => {
+    const res = await api.post('/method/xuanhoa_app.api.delete_bom', { bom_name: name })
+    return res.data.message
+  }
+}
+
+// ==================== WAREHOUSE STOCK APIs ====================
+
+export const warehouseStockAPI = {
+  /**
+   * Get stock grouped by warehouse (for "Theo kho" view)
+   * @param {Object} params - { search, item_group }
+   */
+  getByWarehouse: async (params = {}) => {
+    const res = await api.post('/method/xuanhoa_app.api.get_stock_by_warehouse', params)
+    return res.data.message
+  },
+
+  /**
+   * Get stock for a specific warehouse
+   * @param {string} warehouse - Warehouse name
+   * @param {Object} params - { search, page, page_size }
+   */
+  getWarehouseStock: async (warehouse, params = {}) => {
+    const res = await api.post('/method/xuanhoa_app.api.get_warehouse_stock', { warehouse, ...params })
+    return res.data.message
+  },
+
+  /**
+   * Get all stock (flat list)
+   * @param {Object} params - { warehouse, item_code, item_group, search, page, page_size }
+   */
+  getAll: async (params = {}) => {
+    const res = await api.post('/method/xuanhoa_app.api.get_all_stock', params)
+    return res.data.message
+  },
+
+  /**
+   * Get warehouse details with stock summary
+   * @param {string} warehouse - Warehouse name
+   */
+  getWarehouseDetails: async (warehouse) => {
+    const res = await api.post('/method/xuanhoa_app.api.get_warehouse_details', { warehouse })
+    return res.data.message
+  },
+
+  /**
+   * Get stock ledger (transaction history)
+   * @param {Object} params - { warehouse, item_code, from_date, to_date, page, page_size }
+   */
+  getLedger: async (params = {}) => {
+    const res = await api.post('/method/xuanhoa_app.api.get_stock_ledger', params)
+    return res.data.message
+  }
+}
+
+
+// ==================== ITEM MANAGEMENT APIs ====================
+
+export const itemAPI = {
+  /**
+   * Search items for autocomplete (simple search)
+   * @param {Object} params - { search, item_group, warehouse }
+   */
+  search: async (params = {}) => {
+    const res = await api.post('/method/xuanhoa_app.api.search_items', { 
+      query: params.search || '',
+      item_group: params.item_group || null,
+      warehouse: params.warehouse || null
+    })
+    return { success: true, data: res.data.message || [] }
+  },
+
+  /**
+   * Get list of items with pagination and filters
+   * @param {Object} params - { search, item_group, is_stock_item, disabled, page, page_size }
+   */
+  getList: async (params = {}) => {
+    const res = await api.post('/method/xuanhoa_app.api.get_item_list', params)
+    return res.data.message
+  },
+
+  /**
+   * Get item detail
+   * @param {string} itemCode - Item code
+   */
+  getDetail: async (itemCode) => {
+    const res = await api.post('/method/xuanhoa_app.api.get_item_detail', { item_code: itemCode })
+    return res.data.message
+  },
+
+  /**
+   * Create new item
+   * @param {Object} data - Item data
+   */
+  create: async (data) => {
+    const res = await api.post('/method/xuanhoa_app.api.create_item', data)
+    return res.data.message
+  },
+
+  /**
+   * Update existing item
+   * @param {string} itemCode - Item code
+   * @param {Object} data - Update data
+   */
+  update: async (itemCode, data) => {
+    const res = await api.post('/method/xuanhoa_app.api.update_item', { item_code: itemCode, ...data })
+    return res.data.message
+  },
+
+  /**
+   * Toggle item status (active/disabled)
+   * @param {string} itemCode - Item code
+   */
+  toggleStatus: async (itemCode) => {
+    const res = await api.post('/method/xuanhoa_app.api.toggle_item_status', { item_code: itemCode })
+    return res.data.message
+  }
+}
+
+
+// ==================== ITEM GROUP MANAGEMENT APIs ====================
+
+export const itemGroupAPI = {
+  /**
+   * Get list of item groups
+   * @param {Object} params - { search, parent }
+   */
+  getList: async (params = {}) => {
+    const res = await api.post('/method/xuanhoa_app.api.get_item_group_list', params)
+    return res.data.message
+  },
+
+  /**
+   * Get item group tree (hierarchical)
+   */
+  getTree: async () => {
+    const res = await api.post('/method/xuanhoa_app.api.get_item_group_tree')
+    return res.data.message
+  },
+
+  /**
+   * Create new item group
+   * @param {Object} data - { item_group_name, parent_item_group, is_group }
+   */
+  create: async (data) => {
+    const res = await api.post('/method/xuanhoa_app.api.create_item_group', data)
+    return res.data.message
+  },
+
+  /**
+   * Update item group
+   * @param {string} name - Group name
+   * @param {Object} data - Update data
+   */
+  update: async (name, data) => {
+    const res = await api.post('/method/xuanhoa_app.api.update_item_group', { name, ...data })
+    return res.data.message
+  },
+
+  /**
+   * Delete item group
+   * @param {string} name - Group name
+   */
+  delete: async (name) => {
+    const res = await api.post('/method/xuanhoa_app.api.delete_item_group', { name })
+    return res.data.message
+  }
+}
+
+
+// ==================== UOM APIs ====================
+
+export const uomAPI = {
+  /**
+   * Get list of UOMs
+   */
+  getList: async () => {
+    const res = await api.post('/method/xuanhoa_app.api.get_uom_list')
     return res.data.message
   }
 }

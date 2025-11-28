@@ -51,3 +51,15 @@ Supplier,Purchase User,1,1,1,0,0,0,0,1,1,0,0,1,1
 Customer,System Manager,1,1,1,1,0,0,0,1,1,1,1,1,1
 Customer,Sales Manager,1,1,1,1,0,0,0,1,1,1,1,1,1
 Customer,Sales User,1,1,1,0,0,0,0,1,1,0,0,1,1
+Item Group,System Manager,1,1,1,1,0,0,0,1,1,1,1,1,1
+Item Group,Stock Manager,1,1,1,1,0,0,0,1,1,1,1,1,1
+Item Group,Manufacturing Manager,1,1,1,0,0,0,0,1,1,0,1,1,1
+Item Group,Purchase Manager,1,1,1,0,0,0,0,1,1,0,1,1,1
+Item Group,Sales Manager,1,1,1,0,0,0,0,1,1,0,1,1,1
+Item Price,System Manager,1,1,1,1,0,0,0,1,1,1,1,1,1
+Item Price,Stock Manager,1,1,1,1,0,0,0,1,1,1,1,1,1
+Item Price,Purchase Manager,1,1,1,1,0,0,0,1,1,0,1,1,1
+Item Price,Sales Manager,1,1,1,1,0,0,0,1,1,0,1,1,1
+Item Price,Accounts Manager,1,1,1,0,0,0,0,1,1,0,1,1,1
+UOM,System Manager,1,1,1,1,0,0,0,1,1,1,1,1,1
+UOM,Stock Manager,1,1,1,0,0,0,0,1,1,0,1,1,1

@@ -961,7 +961,11 @@ def run():
     create_initial_stock()
     import_work_orders()
     
-    # Step 3: Verify
+    # Step 3: Setup Role Permissions
+    from xuanhoa_app.scripts import import_data
+    import_data.setup_role_permissions()
+    
+    # Step 4: Verify
     frappe.clear_cache()
     verify_setup()
     
@@ -986,6 +990,7 @@ Warehouses:
 Tồn kho ban đầu đã được tạo qua Stock Entry
 Work Orders đã được tạo (Draft)
 BOMs đã được submit và active
+Role Permissions đã được thiết lập
 
 ⚠️  LƯU Ý: Sau khi chạy script, hãy đăng nhập lại để refresh session.
 """)

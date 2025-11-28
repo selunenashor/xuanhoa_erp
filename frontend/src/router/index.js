@@ -68,6 +68,18 @@ const routes = [
         meta: { title: 'Xuất kho' }
       },
       {
+        path: 'stock/warehouses',
+        name: 'WarehouseStock',
+        component: () => import('@/pages/stock/WarehouseStock.vue'),
+        meta: { title: 'Quản lý kho hàng' }
+      },
+      {
+        path: 'production/boms',
+        name: 'BOMList',
+        component: () => import('@/pages/production/BOMList.vue'),
+        meta: { title: 'Định mức NVL (BOM)' }
+      },
+      {
         path: 'production/orders',
         name: 'WorkOrderList',
         component: () => import('@/pages/production/WorkOrderList.vue'),
@@ -122,6 +134,13 @@ const routes = [
         name: 'SalesInvoiceDetail',
         component: () => import('@/pages/selling/SalesInvoiceDetail.vue'),
         meta: { title: 'Chi tiết hóa đơn bán hàng' }
+      },
+      // Master Data routes
+      {
+        path: 'master/items',
+        name: 'ItemList',
+        component: () => import('@/pages/master/ItemList.vue'),
+        meta: { title: 'Quản lý sản phẩm' }
       }
     ]
   },

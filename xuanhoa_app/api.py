@@ -581,18 +581,20 @@ def get_boms(item_code=None, is_active=1, is_default=None):
     Args:
         item_code: Lọc theo sản phẩm (tùy chọn)
         is_active: Chỉ lấy BOM đang hoạt động (mặc định = 1)
-        is_default: Chỉ lấy BOM mặc định (tùy chọn)
+        is_default: Chỉ lấy BOM mặc định (tùy chọn, chỉ filter khi = 1)
     
     Returns:
         list: Danh sách BOM
     """
     filters = {"docstatus": 1}
     
-    if is_active is not None:
-        filters["is_active"] = int(is_active)
+    if is_active is not None and int(is_active) == 1:
+        filters["is_active"] = 1
     
-    if is_default is not None:
-        filters["is_default"] = int(is_default)
+    # Chỉ filter is_default khi muốn lấy BOM mặc định (is_default=1)
+    # Không filter khi is_default=0 hoặc None (lấy tất cả)
+    if is_default is not None and int(is_default) == 1:
+        filters["is_default"] = 1
     
     if item_code:
         filters["item"] = item_code
@@ -642,8 +644,9 @@ def get_bom_detail(bom_no):
             "item_name": item.item_name,
             "qty": item.qty,
             "uom": item.uom,
-            "rate": item.rate,
-            "amount": item.amount,
+            "stock_uom": item.stock_uom,
+            "rate": item.rate or 0,
+            "amount": item.amount or 0,
             "source_warehouse": item.source_warehouse
         })
     
@@ -653,11 +656,12 @@ def get_bom_detail(bom_no):
         "item": doc.item,
         "item_name": doc.item_name,
         "quantity": doc.quantity,
+        "uom": doc.uom,
         "is_active": doc.is_active,
         "is_default": doc.is_default,
-        "total_cost": doc.total_cost,
-        "items": items,
-        "uom": frappe.db.get_value("Item", doc.item, "stock_uom") or "Nos"
+        "raw_material_cost": doc.raw_material_cost or 0,
+        "total_cost": doc.total_cost or 0,
+        "items": items
     }
 
 
@@ -2746,3 +2750,1521 @@ def create_payment_for_sales_invoice(sales_invoice, amount=None, mode_of_payment
             "success": False,
             "message": _parse_friendly_error(str(e))
         }
+
+
+# ============================================
+# BOM MANAGEMENT APIs
+# ============================================
+
+@frappe.whitelist()
+def get_bom_list(search=None, item=None, is_active=None, is_default=None, page=1, page_size=20):
+    """
+    Lấy danh sách BOM với phân trang và tìm kiếm
+    
+    Args:
+        search: Tìm kiếm theo tên BOM, item code, item name
+        item: Lọc theo item code
+        is_active: Lọc BOM đang hoạt động (1/0)
+        is_default: Lọc BOM mặc định (1/0)
+        page: Trang hiện tại
+        page_size: Số items/trang
+    
+    Returns:
+        dict: {success, data, total, page, page_size}
+    """
+    try:
+        filters = {"docstatus": 1}  # Chỉ lấy BOM đã submit
+        
+        if is_active is not None and is_active != "":
+            filters["is_active"] = int(is_active)
+        
+        if is_default is not None and is_default != "":
+            filters["is_default"] = int(is_default)
+        
+        if item:
+            filters["item"] = item
+        
+        # Search
+        or_filters = None
+        if search:
+            or_filters = [
+                ["name", "like", f"%{search}%"],
+                ["item", "like", f"%{search}%"],
+                ["item_name", "like", f"%{search}%"]
+            ]
+        
+        # Get total count - dùng get_all vì db.count không hỗ trợ or_filters
+        if or_filters:
+            total = len(frappe.get_all("BOM", filters=filters, or_filters=or_filters, pluck="name"))
+        else:
+            total = frappe.db.count("BOM", filters=filters)
+        
+        # Pagination
+        page = int(page)
+        page_size = int(page_size)
+        offset = (page - 1) * page_size
+        
+        boms = frappe.get_all(
+            "BOM",
+            filters=filters,
+            or_filters=or_filters,
+            fields=[
+                "name", "item", "item_name", "quantity", "uom",
+                "is_active", "is_default", "total_cost",
+                "company", "currency", "creation", "modified"
+            ],
+            order_by="is_default desc, modified desc",
+            start=offset,
+            page_length=page_size
+        )
+        
+        # Thêm thông tin bổ sung
+        for bom in boms:
+            # Đếm số nguyên liệu
+            bom["item_count"] = frappe.db.count("BOM Item", {"parent": bom.name})
+            # Format dates
+            bom["creation_formatted"] = frappe.utils.format_date(bom.creation, "dd/MM/yyyy")
+            bom["modified_formatted"] = frappe.utils.format_date(bom.modified, "dd/MM/yyyy")
+        
+        return {
+            "success": True,
+            "data": boms,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": (total + page_size - 1) // page_size
+        }
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "get_bom_list Error")
+        return {"success": False, "message": str(e)}
+
+
+@frappe.whitelist()
+def create_bom(item, items, quantity=1, is_active=1, is_default=0, remarks=None):
+    """
+    Tạo BOM mới
+    
+    Args:
+        item: Mã sản phẩm (thành phẩm)
+        items: Danh sách nguyên liệu JSON [{item_code, qty, uom, rate}]
+        quantity: Số lượng thành phẩm (mặc định = 1)
+        is_active: Kích hoạt (1/0)
+        is_default: Đặt làm mặc định (1/0)
+        remarks: Ghi chú
+    
+    Returns:
+        dict: {success, name, message}
+    """
+    import json
+    
+    try:
+        # Parse items
+        if isinstance(items, str):
+            items = json.loads(items)
+        
+        if not items or len(items) == 0:
+            return {"success": False, "message": _("Vui lòng thêm ít nhất 1 nguyên liệu")}
+        
+        company = frappe.defaults.get_user_default("Company") or "Xuân Hòa Thái Bình"
+        
+        doc = frappe.new_doc("BOM")
+        doc.item = item
+        doc.company = company
+        doc.quantity = float(quantity)
+        doc.is_active = int(is_active)
+        doc.is_default = int(is_default)
+        
+        if remarks:
+            doc.remarks = remarks
+        
+        for bom_item in items:
+            row = doc.append("items", {})
+            row.item_code = bom_item.get("item_code")
+            row.qty = float(bom_item.get("qty", 1))
+            if bom_item.get("uom"):
+                row.uom = bom_item.get("uom")
+            if bom_item.get("rate"):
+                row.rate = float(bom_item.get("rate"))
+        
+        doc.insert()
+        doc.submit()
+        
+        # Update cost after submit to calculate raw_material_cost
+        doc.update_cost(update_parent=True, from_child_bom=False, save=True)
+        
+        return {
+            "success": True,
+            "name": doc.name,
+            "message": _("Đã tạo BOM {0}").format(doc.name)
+        }
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "create_bom Error")
+        return {"success": False, "message": _parse_friendly_error(str(e))}
+
+
+@frappe.whitelist()
+def toggle_bom_active(bom_no):
+    """
+    Bật/tắt trạng thái active của BOM
+    
+    Args:
+        bom_no: Mã BOM
+    
+    Returns:
+        dict: {success, is_active, message}
+    """
+    try:
+        doc = frappe.get_doc("BOM", bom_no)
+        doc.is_active = 0 if doc.is_active else 1
+        doc.save()
+        
+        status = "kích hoạt" if doc.is_active else "vô hiệu hóa"
+        return {
+            "success": True,
+            "is_active": doc.is_active,
+            "message": _("Đã {0} BOM {1}").format(status, bom_no)
+        }
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "toggle_bom_active Error")
+        return {"success": False, "message": str(e)}
+
+
+@frappe.whitelist()
+def set_default_bom(bom_no):
+    """
+    Đặt BOM làm mặc định cho sản phẩm
+    
+    Args:
+        bom_no: Mã BOM
+    
+    Returns:
+        dict: {success, message}
+    """
+    try:
+        doc = frappe.get_doc("BOM", bom_no)
+        
+        # Bỏ default của các BOM khác cùng item
+        frappe.db.sql("""
+            UPDATE `tabBOM` SET is_default = 0 
+            WHERE item = %s AND name != %s AND docstatus = 1
+        """, (doc.item, bom_no))
+        
+        doc.is_default = 1
+        doc.save()
+        
+        return {
+            "success": True,
+            "message": _("Đã đặt {0} làm BOM mặc định cho {1}").format(bom_no, doc.item)
+        }
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "set_default_bom Error")
+        return {"success": False, "message": str(e)}
+
+
+# ============================================
+# WAREHOUSE & STOCK MANAGEMENT APIs
+# ============================================
+
+@frappe.whitelist()
+def get_warehouse_list(search=None, is_group=None, company=None):
+    """
+    Lấy danh sách kho với thông tin tồn kho
+    
+    Args:
+        search: Tìm kiếm theo tên kho
+        is_group: Lọc theo loại (0=kho thực, 1=kho nhóm)
+        company: Lọc theo công ty
+    
+    Returns:
+        dict: {success, data}
+    """
+    try:
+        filters = {"disabled": 0}
+        
+        if is_group is not None and is_group != "":
+            filters["is_group"] = int(is_group)
+        
+        if company:
+            filters["company"] = company
+        else:
+            default_company = frappe.defaults.get_user_default("Company")
+            if default_company:
+                filters["company"] = default_company
+        
+        or_filters = None
+        if search:
+            or_filters = [
+                ["name", "like", f"%{search}%"],
+                ["warehouse_name", "like", f"%{search}%"]
+            ]
+        
+        warehouses = frappe.get_all(
+            "Warehouse",
+            filters=filters,
+            or_filters=or_filters,
+            fields=["name", "warehouse_name", "parent_warehouse", "is_group", "warehouse_type", "company"],
+            order_by="warehouse_name"
+        )
+        
+        # Thêm thống kê tồn kho cho mỗi kho
+        for wh in warehouses:
+            if not wh.is_group:
+                # Đếm số item có tồn kho
+                stock_stats = frappe.db.sql("""
+                    SELECT 
+                        COUNT(DISTINCT item_code) as item_count,
+                        SUM(actual_qty) as total_qty,
+                        SUM(stock_value) as total_value
+                    FROM `tabBin`
+                    WHERE warehouse = %s AND actual_qty > 0
+                """, wh.name, as_dict=True)[0]
+                
+                wh["item_count"] = stock_stats.get("item_count") or 0
+                wh["total_qty"] = stock_stats.get("total_qty") or 0
+                wh["total_value"] = stock_stats.get("total_value") or 0
+            else:
+                wh["item_count"] = 0
+                wh["total_qty"] = 0
+                wh["total_value"] = 0
+        
+        return {"success": True, "data": warehouses}
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "get_warehouse_list Error")
+        return {"success": False, "message": str(e)}
+
+
+@frappe.whitelist()
+def get_stock_by_warehouse(search=None, item_group=None):
+    """
+    Lấy tồn kho nhóm theo kho (cho chế độ "Theo kho")
+    
+    Returns:
+        list: [{warehouse, warehouse_name, total_qty, total_value, items: [...]}, ...]
+    """
+    try:
+        company = frappe.defaults.get_user_default("Company") or "Xuân Hòa Thái Bình"
+        
+        # Get all warehouses with stock
+        warehouses = frappe.db.sql("""
+            SELECT DISTINCT 
+                b.warehouse,
+                w.warehouse_name
+            FROM `tabBin` b
+            LEFT JOIN `tabWarehouse` w ON b.warehouse = w.name
+            WHERE b.actual_qty != 0 AND w.company = %s AND w.is_group = 0
+            ORDER BY w.warehouse_name
+        """, company, as_dict=True)
+        
+        result = []
+        total_summary = {"totalItems": 0, "totalQty": 0, "totalValue": 0}
+        
+        for wh in warehouses:
+            # Build item conditions
+            item_conditions = "b.warehouse = %s AND b.actual_qty != 0"
+            params = [wh.warehouse]
+            
+            if search:
+                item_conditions += " AND (b.item_code LIKE %s OR i.item_name LIKE %s)"
+                params.extend([f"%{search}%", f"%{search}%"])
+            
+            if item_group:
+                item_conditions += " AND i.item_group = %s"
+                params.append(item_group)
+            
+            # Get items in this warehouse
+            items = frappe.db.sql(f"""
+                SELECT 
+                    b.item_code,
+                    i.item_name,
+                    i.item_group,
+                    i.stock_uom,
+                    b.actual_qty,
+                    b.valuation_rate,
+                    b.stock_value
+                FROM `tabBin` b
+                LEFT JOIN `tabItem` i ON b.item_code = i.name
+                WHERE {item_conditions}
+                ORDER BY i.item_name
+            """, params, as_dict=True)
+            
+            if items:  # Only include warehouses with items (after filter)
+                total_qty = sum(item.actual_qty or 0 for item in items)
+                total_value = sum(item.stock_value or 0 for item in items)
+                
+                result.append({
+                    "warehouse": wh.warehouse,
+                    "warehouse_name": wh.warehouse_name,
+                    "total_qty": total_qty,
+                    "total_value": total_value,
+                    "items": items
+                })
+                
+                total_summary["totalItems"] += len(items)
+                total_summary["totalQty"] += total_qty
+                total_summary["totalValue"] += total_value
+        
+        return {
+            "data": result,
+            "summary": total_summary
+        }
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "get_stock_by_warehouse Error")
+        return {"data": [], "summary": {"totalItems": 0, "totalQty": 0, "totalValue": 0}}
+
+
+@frappe.whitelist()
+def get_warehouse_stock(warehouse, search=None, page=1, page_size=20):
+    """
+    Lấy danh sách hàng hóa trong kho
+    
+    Args:
+        warehouse: Tên kho
+        search: Tìm kiếm theo item code hoặc tên
+        page: Trang
+        page_size: Số items/trang
+    
+    Returns:
+        dict: {success, data, total, warehouse_info}
+    """
+    try:
+        page = int(page)
+        page_size = int(page_size)
+        offset = (page - 1) * page_size
+        
+        # Build query
+        conditions = "b.warehouse = %s AND b.actual_qty != 0"
+        params = [warehouse]
+        
+        if search:
+            conditions += " AND (b.item_code LIKE %s OR i.item_name LIKE %s)"
+            params.extend([f"%{search}%", f"%{search}%"])
+        
+        # Get total
+        total = frappe.db.sql(f"""
+            SELECT COUNT(*) 
+            FROM `tabBin` b
+            LEFT JOIN `tabItem` i ON b.item_code = i.name
+            WHERE {conditions}
+        """, params)[0][0]
+        
+        # Get data
+        stocks = frappe.db.sql(f"""
+            SELECT 
+                b.item_code,
+                i.item_name,
+                i.item_group,
+                i.stock_uom as uom,
+                b.actual_qty,
+                b.reserved_qty,
+                b.ordered_qty,
+                b.projected_qty,
+                b.valuation_rate,
+                b.stock_value
+            FROM `tabBin` b
+            LEFT JOIN `tabItem` i ON b.item_code = i.name
+            WHERE {conditions}
+            ORDER BY b.item_code
+            LIMIT %s OFFSET %s
+        """, params + [page_size, offset], as_dict=True)
+        
+        # Warehouse info
+        wh_info = frappe.db.get_value("Warehouse", warehouse, 
+            ["name", "warehouse_name", "company"], as_dict=True)
+        
+        return {
+            "success": True,
+            "data": stocks,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": (total + page_size - 1) // page_size,
+            "warehouse_info": wh_info
+        }
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "get_warehouse_stock Error")
+        return {"success": False, "message": str(e)}
+
+
+@frappe.whitelist()
+def get_item_stock_across_warehouses(item_code):
+    """
+    Lấy tồn kho của 1 item trên tất cả các kho
+    
+    Args:
+        item_code: Mã sản phẩm
+    
+    Returns:
+        dict: {success, data, item_info}
+    """
+    try:
+        # Get item info
+        item_info = frappe.db.get_value("Item", item_code, 
+            ["item_code", "item_name", "item_group", "stock_uom", "valuation_method"], as_dict=True)
+        
+        if not item_info:
+            return {"success": False, "message": _("Không tìm thấy sản phẩm {0}").format(item_code)}
+        
+        # Get stock in all warehouses
+        stocks = frappe.db.sql("""
+            SELECT 
+                b.warehouse,
+                w.warehouse_name,
+                b.actual_qty,
+                b.reserved_qty,
+                b.ordered_qty,
+                b.projected_qty,
+                b.valuation_rate,
+                b.stock_value
+            FROM `tabBin` b
+            LEFT JOIN `tabWarehouse` w ON b.warehouse = w.name
+            WHERE b.item_code = %s AND b.actual_qty != 0
+            ORDER BY b.actual_qty DESC
+        """, item_code, as_dict=True)
+        
+        # Total
+        total_qty = sum(s.actual_qty for s in stocks)
+        total_value = sum(s.stock_value or 0 for s in stocks)
+        
+        return {
+            "success": True,
+            "data": stocks,
+            "item_info": item_info,
+            "total_qty": total_qty,
+            "total_value": total_value
+        }
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "get_item_stock_across_warehouses Error")
+        return {"success": False, "message": str(e)}
+
+
+@frappe.whitelist()
+def get_stock_summary(warehouse=None):
+    """
+    Lấy tổng quan tồn kho
+    
+    Args:
+        warehouse: Lọc theo kho (tùy chọn)
+    
+    Returns:
+        dict: {success, summary, by_item_group, low_stock_items}
+    """
+    try:
+        company = frappe.defaults.get_user_default("Company") or "Xuân Hòa Thái Bình"
+        
+        # Filter conditions
+        wh_condition = ""
+        params = []
+        if warehouse:
+            wh_condition = "AND b.warehouse = %s"
+            params.append(warehouse)
+        else:
+            wh_condition = "AND w.company = %s"
+            params.append(company)
+        
+        # Summary stats
+        summary = frappe.db.sql(f"""
+            SELECT 
+                COUNT(DISTINCT b.item_code) as total_items,
+                COUNT(DISTINCT b.warehouse) as total_warehouses,
+                SUM(b.actual_qty) as total_qty,
+                SUM(b.stock_value) as total_value
+            FROM `tabBin` b
+            LEFT JOIN `tabWarehouse` w ON b.warehouse = w.name
+            WHERE b.actual_qty > 0 {wh_condition}
+        """, params, as_dict=True)[0]
+        
+        # By item group
+        by_group = frappe.db.sql(f"""
+            SELECT 
+                i.item_group,
+                COUNT(DISTINCT b.item_code) as item_count,
+                SUM(b.actual_qty) as qty,
+                SUM(b.stock_value) as value
+            FROM `tabBin` b
+            LEFT JOIN `tabItem` i ON b.item_code = i.name
+            LEFT JOIN `tabWarehouse` w ON b.warehouse = w.name
+            WHERE b.actual_qty > 0 {wh_condition}
+            GROUP BY i.item_group
+            ORDER BY value DESC
+        """, params, as_dict=True)
+        
+        # Low stock items (qty < 10)
+        low_stock = frappe.db.sql(f"""
+            SELECT 
+                b.item_code,
+                i.item_name,
+                b.warehouse,
+                b.actual_qty,
+                i.stock_uom as uom
+            FROM `tabBin` b
+            LEFT JOIN `tabItem` i ON b.item_code = i.name
+            LEFT JOIN `tabWarehouse` w ON b.warehouse = w.name
+            WHERE b.actual_qty > 0 AND b.actual_qty < 10 {wh_condition}
+            ORDER BY b.actual_qty
+            LIMIT 10
+        """, params, as_dict=True)
+        
+        return {
+            "success": True,
+            "summary": summary,
+            "by_item_group": by_group,
+            "low_stock_items": low_stock
+        }
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "get_stock_summary Error")
+        return {"success": False, "message": str(e)}
+
+
+# ============================================
+# ADDITIONAL BOM & STOCK APIs
+# ============================================
+
+@frappe.whitelist()
+def get_all_boms(item=None, is_active=None, is_default=None, search=None, page=1, page_size=20):
+    """
+    Lấy danh sách tất cả BOM với filter và phân trang
+    
+    Args:
+        item: Lọc theo sản phẩm
+        is_active: Lọc theo trạng thái (0/1)
+        is_default: Lọc theo mặc định (0/1)
+        search: Tìm kiếm theo tên BOM hoặc tên sản phẩm
+        page: Trang
+        page_size: Số items/trang
+    
+    Returns:
+        dict: {data, total, page, page_size, total_pages}
+    """
+    try:
+        page = int(page)
+        page_size = int(page_size)
+        offset = (page - 1) * page_size
+        
+        # Build filters
+        conditions = ["b.docstatus = 1"]
+        params = []
+        
+        if item:
+            conditions.append("b.item = %s")
+            params.append(item)
+        
+        if is_active is not None and is_active != "":
+            conditions.append("b.is_active = %s")
+            params.append(int(is_active))
+        
+        if is_default is not None and is_default != "":
+            conditions.append("b.is_default = %s")
+            params.append(int(is_default))
+        
+        if search:
+            conditions.append("(b.name LIKE %s OR b.item LIKE %s OR i.item_name LIKE %s)")
+            params.extend([f"%{search}%", f"%{search}%", f"%{search}%"])
+        
+        where_clause = " AND ".join(conditions)
+        
+        # Get total count
+        total = frappe.db.sql(f"""
+            SELECT COUNT(*)
+            FROM `tabBOM` b
+            LEFT JOIN `tabItem` i ON b.item = i.name
+            WHERE {where_clause}
+        """, params)[0][0]
+        
+        # Get data
+        boms = frappe.db.sql(f"""
+            SELECT 
+                b.name,
+                b.item,
+                i.item_name,
+                b.quantity,
+                b.uom,
+                b.is_active,
+                b.is_default,
+                b.raw_material_cost,
+                b.total_cost,
+                b.creation,
+                (SELECT COUNT(*) FROM `tabBOM Item` bi WHERE bi.parent = b.name) as item_count
+            FROM `tabBOM` b
+            LEFT JOIN `tabItem` i ON b.item = i.name
+            WHERE {where_clause}
+            ORDER BY b.creation DESC
+            LIMIT %s OFFSET %s
+        """, params + [page_size, offset], as_dict=True)
+        
+        return {
+            "data": boms,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": (total + page_size - 1) // page_size if total > 0 else 1
+        }
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "get_all_boms Error")
+        return {"data": [], "total": 0, "page": 1, "page_size": page_size, "total_pages": 1}
+
+
+@frappe.whitelist()
+def update_bom(bom_name, is_active=None, is_default=None, quantity=None, items=None):
+    """
+    Cập nhật BOM
+    - Nếu chỉ thay đổi is_active/is_default: update trực tiếp
+    - Nếu thay đổi items/quantity: Cancel BOM cũ, tạo BOM mới (amendment)
+    
+    Args:
+        bom_name: Mã BOM
+        is_active: Trạng thái hoạt động (0/1)
+        is_default: Mặc định (0/1)
+        quantity: Số lượng sản phẩm
+        items: Danh sách NVL mới (JSON string hoặc list)
+    
+    Returns:
+        dict: {success, message, name}
+    """
+    import json
+    
+    try:
+        old_doc = frappe.get_doc("BOM", bom_name)
+        
+        # Parse items nếu có
+        if items:
+            if isinstance(items, str):
+                items = json.loads(items)
+        
+        # Nếu có thay đổi items hoặc quantity -> tạo BOM mới (amendment)
+        if items is not None and len(items) > 0:
+            # Cancel BOM cũ
+            if old_doc.docstatus == 1:
+                old_doc.cancel()
+            
+            # Tạo BOM mới (amended from)
+            company = frappe.defaults.get_user_default("Company") or "Xuân Hòa Thái Bình"
+            new_doc = frappe.new_doc("BOM")
+            new_doc.item = old_doc.item
+            new_doc.company = company
+            new_doc.quantity = float(quantity) if quantity else old_doc.quantity
+            new_doc.is_active = int(is_active) if is_active is not None else old_doc.is_active
+            new_doc.is_default = int(is_default) if is_default is not None else old_doc.is_default
+            new_doc.amended_from = bom_name
+            
+            for bom_item in items:
+                row = new_doc.append("items", {})
+                row.item_code = bom_item.get("item_code")
+                row.qty = float(bom_item.get("qty", 1))
+                if bom_item.get("uom"):
+                    row.uom = bom_item.get("uom")
+            
+            new_doc.insert()
+            new_doc.submit()
+            
+            # Update cost
+            new_doc.update_cost(update_parent=True, from_child_bom=False, save=True)
+            
+            # Nếu is_default, bỏ default các BOM khác
+            if new_doc.is_default:
+                frappe.db.sql("""
+                    UPDATE `tabBOM` SET is_default = 0 
+                    WHERE item = %s AND name != %s AND docstatus = 1
+                """, (new_doc.item, new_doc.name))
+            
+            return {
+                "success": True,
+                "name": new_doc.name,
+                "message": _("Đã cập nhật BOM {0} thành {1}").format(bom_name, new_doc.name)
+            }
+        else:
+            # Chỉ update trạng thái
+            if is_active is not None:
+                old_doc.is_active = int(is_active)
+            
+            if is_default is not None and int(is_default) == 1:
+                # Bỏ default của các BOM khác cùng item
+                frappe.db.sql("""
+                    UPDATE `tabBOM` SET is_default = 0 
+                    WHERE item = %s AND name != %s AND docstatus = 1
+                """, (old_doc.item, bom_name))
+                old_doc.is_default = 1
+            elif is_default is not None:
+                old_doc.is_default = 0
+            
+            old_doc.save()
+            
+            return {
+                "success": True,
+                "name": bom_name,
+                "message": _("Đã cập nhật BOM {0}").format(bom_name)
+            }
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "update_bom Error")
+        return {"success": False, "message": str(e)}
+
+
+@frappe.whitelist()
+def delete_bom(bom_name):
+    """
+    Xóa BOM (cancel + delete)
+    
+    Args:
+        bom_name: Mã BOM
+    
+    Returns:
+        dict: {success, message}
+    """
+    try:
+        doc = frappe.get_doc("BOM", bom_name)
+        
+        # Check if BOM is used in Work Orders
+        work_orders = frappe.get_all("Work Order", filters={"bom_no": bom_name, "docstatus": ["!=", 2]})
+        if work_orders:
+            return {
+                "success": False,
+                "message": _("Không thể xóa BOM {0} vì đang được sử dụng trong {1} lệnh sản xuất").format(
+                    bom_name, len(work_orders)
+                )
+            }
+        
+        # Cancel if submitted
+        if doc.docstatus == 1:
+            doc.cancel()
+        
+        # Delete
+        frappe.delete_doc("BOM", bom_name, force=1)
+        
+        return {
+            "success": True,
+            "message": _("Đã xóa BOM {0}").format(bom_name)
+        }
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "delete_bom Error")
+        return {"success": False, "message": str(e)}
+
+
+@frappe.whitelist()
+def get_all_stock(warehouse=None, item_code=None, item_group=None, search=None, page=1, page_size=50):
+    """
+    Lấy toàn bộ tồn kho theo sản phẩm (flat list)
+    
+    Args:
+        warehouse: Lọc theo kho
+        item_code: Lọc theo mã SP
+        item_group: Lọc theo nhóm hàng
+        search: Tìm kiếm theo mã/tên SP
+        page: Trang
+        page_size: Số items/trang
+    
+    Returns:
+        list: Danh sách tồn kho theo sản phẩm
+    """
+    try:
+        page = int(page)
+        page_size = int(page_size)
+        offset = (page - 1) * page_size
+        
+        # Build conditions
+        conditions = ["b.actual_qty != 0"]
+        params = []
+        
+        if warehouse:
+            conditions.append("b.warehouse = %s")
+            params.append(warehouse)
+        
+        if item_code:
+            conditions.append("b.item_code = %s")
+            params.append(item_code)
+        
+        if item_group:
+            conditions.append("i.item_group = %s")
+            params.append(item_group)
+        
+        if search:
+            conditions.append("(b.item_code LIKE %s OR i.item_name LIKE %s)")
+            params.extend([f"%{search}%", f"%{search}%"])
+        
+        where_clause = " AND ".join(conditions)
+        
+        # Get total
+        total = frappe.db.sql(f"""
+            SELECT COUNT(*)
+            FROM `tabBin` b
+            LEFT JOIN `tabItem` i ON b.item_code = i.name
+            WHERE {where_clause}
+        """, params)[0][0]
+        
+        # Get data
+        stocks = frappe.db.sql(f"""
+            SELECT 
+                b.item_code,
+                i.item_name,
+                i.item_group,
+                i.stock_uom,
+                b.warehouse,
+                w.warehouse_name,
+                b.actual_qty,
+                b.reserved_qty,
+                b.ordered_qty,
+                b.projected_qty,
+                b.valuation_rate,
+                b.stock_value
+            FROM `tabBin` b
+            LEFT JOIN `tabItem` i ON b.item_code = i.name
+            LEFT JOIN `tabWarehouse` w ON b.warehouse = w.name
+            WHERE {where_clause}
+            ORDER BY i.item_name, b.warehouse
+            LIMIT %s OFFSET %s
+        """, params + [page_size, offset], as_dict=True)
+        
+        return {
+            "data": stocks,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": (total + page_size - 1) // page_size if total > 0 else 1
+        }
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "get_all_stock Error")
+        return []
+
+
+@frappe.whitelist()
+def get_stock_ledger(warehouse=None, item_code=None, from_date=None, to_date=None, page=1, page_size=50):
+    """
+    Lấy lịch sử xuất nhập kho (Stock Ledger Entry)
+    
+    Args:
+        warehouse: Lọc theo kho
+        item_code: Lọc theo mã SP
+        from_date: Từ ngày
+        to_date: Đến ngày
+        page: Trang
+        page_size: Số items/trang
+    
+    Returns:
+        list: Danh sách giao dịch kho
+    """
+    try:
+        page = int(page)
+        page_size = int(page_size)
+        offset = (page - 1) * page_size
+        
+        # Build conditions
+        conditions = ["1=1"]
+        params = []
+        
+        if warehouse:
+            conditions.append("sle.warehouse = %s")
+            params.append(warehouse)
+        
+        if item_code:
+            conditions.append("sle.item_code = %s")
+            params.append(item_code)
+        
+        if from_date:
+            conditions.append("sle.posting_date >= %s")
+            params.append(from_date)
+        
+        if to_date:
+            conditions.append("sle.posting_date <= %s")
+            params.append(to_date)
+        
+        where_clause = " AND ".join(conditions)
+        
+        # Get total
+        total = frappe.db.sql(f"""
+            SELECT COUNT(*)
+            FROM `tabStock Ledger Entry` sle
+            WHERE {where_clause}
+        """, params)[0][0]
+        
+        # Get data
+        entries = frappe.db.sql(f"""
+            SELECT 
+                sle.name,
+                sle.posting_date,
+                sle.posting_time,
+                sle.item_code,
+                i.item_name,
+                sle.warehouse,
+                sle.actual_qty,
+                sle.qty_after_transaction,
+                sle.valuation_rate,
+                sle.stock_value,
+                sle.stock_value_difference,
+                sle.voucher_type,
+                sle.voucher_no
+            FROM `tabStock Ledger Entry` sle
+            LEFT JOIN `tabItem` i ON sle.item_code = i.name
+            WHERE {where_clause}
+            ORDER BY sle.posting_date DESC, sle.posting_time DESC, sle.creation DESC
+            LIMIT %s OFFSET %s
+        """, params + [page_size, offset], as_dict=True)
+        
+        return {
+            "data": entries,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": (total + page_size - 1) // page_size if total > 0 else 1
+        }
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "get_stock_ledger Error")
+        return []
+
+
+@frappe.whitelist()
+def get_warehouse_details(warehouse):
+    """
+    Lấy thông tin chi tiết kho với tổng hợp tồn kho
+    
+    Args:
+        warehouse: Tên kho
+    
+    Returns:
+        dict: Thông tin kho và tồn kho
+    """
+    try:
+        # Warehouse info
+        wh = frappe.get_doc("Warehouse", warehouse)
+        
+        # Stock summary
+        stock_summary = frappe.db.sql("""
+            SELECT 
+                COUNT(DISTINCT item_code) as total_items,
+                SUM(actual_qty) as total_qty,
+                SUM(stock_value) as total_value
+            FROM `tabBin`
+            WHERE warehouse = %s AND actual_qty > 0
+        """, warehouse, as_dict=True)[0]
+        
+        # By item group
+        by_group = frappe.db.sql("""
+            SELECT 
+                i.item_group,
+                COUNT(*) as item_count,
+                SUM(b.actual_qty) as qty,
+                SUM(b.stock_value) as value
+            FROM `tabBin` b
+            LEFT JOIN `tabItem` i ON b.item_code = i.name
+            WHERE b.warehouse = %s AND b.actual_qty > 0
+            GROUP BY i.item_group
+            ORDER BY value DESC
+        """, warehouse, as_dict=True)
+        
+        return {
+            "warehouse": {
+                "name": wh.name,
+                "warehouse_name": wh.warehouse_name,
+                "company": wh.company,
+                "warehouse_type": wh.warehouse_type,
+                "parent_warehouse": wh.parent_warehouse
+            },
+            "summary": stock_summary,
+            "by_item_group": by_group
+        }
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "get_warehouse_details Error")
+        return {"warehouse": {}, "summary": {}, "by_item_group": []}
+
+
+# ============================================
+# ITEM MANAGEMENT APIs
+# ============================================
+
+@frappe.whitelist()
+def get_item_list(search=None, item_group=None, is_stock_item=None, disabled=None, page=1, page_size=20):
+    """
+    Lấy danh sách Item với phân trang và filter
+    
+    Args:
+        search: Tìm kiếm theo mã hoặc tên item
+        item_group: Lọc theo nhóm hàng (bao gồm cả sub-groups)
+        is_stock_item: Lọc hàng tồn kho (1/0)
+        disabled: Lọc trạng thái (0=active, 1=disabled)
+        page: Trang hiện tại
+        page_size: Số items/trang
+    
+    Returns:
+        dict: {data, total, page, page_size, total_pages}
+    """
+    try:
+        page = int(page)
+        page_size = int(page_size)
+        offset = (page - 1) * page_size
+        
+        # Build filters
+        filters = {}
+        
+        # Filter theo item_group bao gồm cả sub-groups
+        if item_group:
+            # Lấy lft/rgt của group được chọn
+            group_doc = frappe.db.get_value("Item Group", item_group, ["lft", "rgt"], as_dict=True)
+            if group_doc:
+                # Lấy tất cả sub-groups
+                sub_groups = frappe.get_all(
+                    "Item Group",
+                    filters={"lft": [">=", group_doc.lft], "rgt": ["<=", group_doc.rgt]},
+                    pluck="name"
+                )
+                filters["item_group"] = ["in", sub_groups]
+            else:
+                filters["item_group"] = item_group
+        
+        if is_stock_item is not None and is_stock_item != "":
+            filters["is_stock_item"] = int(is_stock_item)
+        
+        if disabled is not None and disabled != "":
+            filters["disabled"] = int(disabled)
+        else:
+            filters["disabled"] = 0  # Default: chỉ lấy active
+        
+        # Search - sử dụng SQL trực tiếp cho or_filters vì db.count không hỗ trợ or_filters
+        or_filters = None
+        if search:
+            or_filters = [
+                ["item_code", "like", f"%{search}%"],
+                ["item_name", "like", f"%{search}%"]
+            ]
+        
+        # Get total count - dùng get_all với count
+        if or_filters:
+            total = len(frappe.get_all("Item", filters=filters, or_filters=or_filters, pluck="name"))
+        else:
+            total = frappe.db.count("Item", filters=filters)
+        
+        # Get data
+        items = frappe.get_all(
+            "Item",
+            filters=filters,
+            or_filters=or_filters,
+            fields=[
+                "name", "item_code", "item_name", "item_group",
+                "stock_uom", "is_stock_item", "is_purchase_item", "is_sales_item",
+                "disabled", "description", "standard_rate", "valuation_rate",
+                "opening_stock", "image", "creation", "modified"
+            ],
+            order_by="modified desc",
+            start=offset,
+            page_length=page_size
+        )
+        
+        # Add additional info
+        for item in items:
+            # Lấy số lượng tồn kho
+            stock = frappe.db.sql("""
+                SELECT SUM(actual_qty) as qty, SUM(stock_value) as value
+                FROM `tabBin` WHERE item_code = %s
+            """, item.item_code, as_dict=True)
+            item["total_qty"] = stock[0].qty or 0 if stock else 0
+            item["total_value"] = stock[0].value or 0 if stock else 0
+            
+            # Kiểm tra có BOM không
+            item["has_bom"] = frappe.db.exists("BOM", {"item": item.item_code, "docstatus": 1, "is_active": 1})
+        
+        return {
+            "data": items,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": (total + page_size - 1) // page_size if total > 0 else 1
+        }
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "get_item_list Error")
+        return {"data": [], "total": 0, "page": 1, "page_size": page_size, "total_pages": 1}
+
+
+@frappe.whitelist()
+def get_item_detail(item_code):
+    """
+    Lấy chi tiết Item
+    
+    Args:
+        item_code: Mã item
+    
+    Returns:
+        dict: Chi tiết item
+    """
+    try:
+        if not frappe.db.exists("Item", item_code):
+            return {"success": False, "message": _("Item không tồn tại")}
+        
+        doc = frappe.get_doc("Item", item_code)
+        
+        # Lấy stock info
+        stock_info = frappe.db.sql("""
+            SELECT 
+                b.warehouse,
+                w.warehouse_name,
+                b.actual_qty,
+                b.stock_value,
+                b.valuation_rate
+            FROM `tabBin` b
+            LEFT JOIN `tabWarehouse` w ON b.warehouse = w.name
+            WHERE b.item_code = %s AND b.actual_qty != 0
+            ORDER BY b.actual_qty DESC
+        """, item_code, as_dict=True)
+        
+        # Lấy BOM
+        boms = frappe.get_all(
+            "BOM",
+            filters={"item": item_code, "docstatus": 1},
+            fields=["name", "is_active", "is_default", "total_cost", "quantity"]
+        )
+        
+        return {
+            "success": True,
+            "item_code": doc.item_code,
+            "item_name": doc.item_name,
+            "item_group": doc.item_group,
+            "stock_uom": doc.stock_uom,
+            "description": doc.description,
+            "is_stock_item": doc.is_stock_item,
+            "is_purchase_item": doc.is_purchase_item,
+            "is_sales_item": doc.is_sales_item,
+            "disabled": doc.disabled,
+            "standard_rate": doc.standard_rate,
+            "valuation_rate": doc.valuation_rate,
+            "image": doc.image,
+            "stock_info": stock_info,
+            "boms": boms
+        }
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "get_item_detail Error")
+        return {"success": False, "message": str(e)}
+
+
+@frappe.whitelist()
+def create_item(item_code, item_name, item_group, stock_uom="Nos", is_stock_item=1, 
+                is_purchase_item=1, is_sales_item=0, standard_rate=0, description=None):
+    """
+    Tạo Item mới
+    
+    Args:
+        item_code: Mã item
+        item_name: Tên item
+        item_group: Nhóm hàng
+        stock_uom: Đơn vị tính (mặc định: Nos)
+        is_stock_item: Là hàng tồn kho (1/0)
+        is_purchase_item: Có thể mua (1/0)
+        is_sales_item: Có thể bán (1/0)
+        standard_rate: Giá tiêu chuẩn
+        description: Mô tả
+    
+    Returns:
+        dict: {success, name, message}
+    """
+    try:
+        if frappe.db.exists("Item", item_code):
+            return {"success": False, "message": _("Mã item {0} đã tồn tại").format(item_code)}
+        
+        doc = frappe.new_doc("Item")
+        doc.item_code = item_code
+        doc.item_name = item_name
+        doc.item_group = item_group
+        doc.stock_uom = stock_uom
+        doc.is_stock_item = int(is_stock_item)
+        doc.is_purchase_item = int(is_purchase_item)
+        doc.is_sales_item = int(is_sales_item)
+        doc.standard_rate = float(standard_rate) if standard_rate else 0
+        
+        if description:
+            doc.description = description
+        
+        doc.insert()
+        
+        return {
+            "success": True,
+            "name": doc.name,
+            "message": _("Đã tạo item {0}").format(item_code)
+        }
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "create_item Error")
+        return {"success": False, "message": str(e)}
+
+
+@frappe.whitelist()
+def update_item(item_code, item_name=None, item_group=None, stock_uom=None,
+                is_purchase_item=None, is_sales_item=None, standard_rate=None, 
+                description=None, disabled=None):
+    """
+    Cập nhật Item
+    
+    Args:
+        item_code: Mã item
+        ... các fields cần update
+    
+    Returns:
+        dict: {success, message}
+    """
+    try:
+        if not frappe.db.exists("Item", item_code):
+            return {"success": False, "message": _("Item không tồn tại")}
+        
+        doc = frappe.get_doc("Item", item_code)
+        
+        if item_name is not None:
+            doc.item_name = item_name
+        if item_group is not None:
+            doc.item_group = item_group
+        if stock_uom is not None:
+            doc.stock_uom = stock_uom
+        if is_purchase_item is not None:
+            doc.is_purchase_item = int(is_purchase_item)
+        if is_sales_item is not None:
+            doc.is_sales_item = int(is_sales_item)
+        if standard_rate is not None:
+            doc.standard_rate = float(standard_rate)
+        if description is not None:
+            doc.description = description
+        if disabled is not None:
+            doc.disabled = int(disabled)
+        
+        doc.save()
+        
+        return {
+            "success": True,
+            "message": _("Đã cập nhật item {0}").format(item_code)
+        }
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "update_item Error")
+        return {"success": False, "message": str(e)}
+
+
+@frappe.whitelist()
+def toggle_item_status(item_code):
+    """
+    Bật/tắt trạng thái Item
+    """
+    try:
+        doc = frappe.get_doc("Item", item_code)
+        doc.disabled = 0 if doc.disabled else 1
+        doc.save()
+        
+        status = "vô hiệu hóa" if doc.disabled else "kích hoạt"
+        return {
+            "success": True,
+            "disabled": doc.disabled,
+            "message": _("Đã {0} item {1}").format(status, item_code)
+        }
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "toggle_item_status Error")
+        return {"success": False, "message": str(e)}
+
+
+# ============================================
+# ITEM GROUP MANAGEMENT APIs
+# ============================================
+
+@frappe.whitelist()
+def get_item_group_list(search=None, parent=None):
+    """
+    Lấy danh sách Item Group
+    
+    Args:
+        search: Tìm kiếm theo tên
+        parent: Lọc theo parent group
+    
+    Returns:
+        list: Danh sách item groups
+    """
+    try:
+        filters = {}
+        
+        if parent:
+            filters["parent_item_group"] = parent
+        
+        or_filters = None
+        if search:
+            or_filters = [
+                ["item_group_name", "like", f"%{search}%"],
+                ["name", "like", f"%{search}%"]
+            ]
+        
+        groups = frappe.get_all(
+            "Item Group",
+            filters=filters,
+            or_filters=or_filters,
+            fields=["name", "item_group_name", "parent_item_group", "is_group", "image", "lft", "rgt"],
+            order_by="lft"
+        )
+        
+        # Đếm số item trong mỗi group (bao gồm cả sub-groups)
+        for group in groups:
+            # Sử dụng lft/rgt để đếm items trong group và tất cả sub-groups
+            group["item_count"] = frappe.db.count("Item", {
+                "item_group": ["in", frappe.get_all(
+                    "Item Group",
+                    filters={"lft": [">=", group.lft], "rgt": ["<=", group.rgt]},
+                    pluck="name"
+                )],
+                "disabled": 0
+            }) if group.lft and group.rgt else frappe.db.count("Item", {"item_group": group.name, "disabled": 0})
+            # Đếm số subgroup trực tiếp
+            group["subgroup_count"] = frappe.db.count("Item Group", {"parent_item_group": group.name})
+        
+        return groups
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "get_item_group_list Error")
+        return []
+
+
+@frappe.whitelist()
+def get_item_group_tree():
+    """
+    Lấy cây Item Group (hierarchical)
+    
+    Returns:
+        list: Cây item groups
+    """
+    try:
+        # Lấy tất cả groups với lft/rgt để đếm items trong sub-groups
+        groups = frappe.get_all(
+            "Item Group",
+            fields=["name", "item_group_name", "parent_item_group", "is_group", "lft", "rgt"],
+            order_by="lft"
+        )
+        
+        # Đếm items cho mỗi group (bao gồm cả sub-groups)
+        for group in groups:
+            # Lấy tất cả sub-groups dựa trên lft/rgt
+            sub_groups = [g.name for g in groups if g.lft >= group.lft and g.rgt <= group.rgt]
+            group["item_count"] = frappe.db.count("Item", {"item_group": ["in", sub_groups], "disabled": 0}) if sub_groups else 0
+        
+        # Build tree
+        def build_tree(parent=None):
+            children = []
+            for group in groups:
+                if group.parent_item_group == parent:
+                    node = {
+                        "name": group.name,
+                        "item_group_name": group.item_group_name,
+                        "is_group": group.is_group,
+                        "item_count": group.item_count,
+                        "children": build_tree(group.name)
+                    }
+                    children.append(node)
+            return children
+        
+        return build_tree("All Item Groups")
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "get_item_group_tree Error")
+        return []
+
+
+@frappe.whitelist()
+def create_item_group(item_group_name, parent_item_group="All Item Groups", is_group=0):
+    """
+    Tạo Item Group mới
+    
+    Args:
+        item_group_name: Tên nhóm
+        parent_item_group: Nhóm cha
+        is_group: Có phải là nhóm chứa (1/0)
+    
+    Returns:
+        dict: {success, name, message}
+    """
+    try:
+        if frappe.db.exists("Item Group", item_group_name):
+            return {"success": False, "message": _("Nhóm hàng {0} đã tồn tại").format(item_group_name)}
+        
+        doc = frappe.new_doc("Item Group")
+        doc.item_group_name = item_group_name
+        doc.parent_item_group = parent_item_group
+        doc.is_group = int(is_group)
+        
+        doc.insert()
+        
+        return {
+            "success": True,
+            "name": doc.name,
+            "message": _("Đã tạo nhóm hàng {0}").format(item_group_name)
+        }
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "create_item_group Error")
+        return {"success": False, "message": str(e)}
+
+
+@frappe.whitelist()
+def update_item_group(name, item_group_name=None, parent_item_group=None):
+    """
+    Cập nhật Item Group
+    """
+    try:
+        if not frappe.db.exists("Item Group", name):
+            return {"success": False, "message": _("Nhóm hàng không tồn tại")}
+        
+        new_name = name
+        
+        # Nếu đổi tên, phải rename document vì name = item_group_name trong Item Group
+        if item_group_name and item_group_name != name:
+            # Rename document (sẽ tự động cập nhật các liên kết)
+            frappe.rename_doc("Item Group", name, item_group_name, merge=False)
+            new_name = item_group_name
+            frappe.db.commit()
+        
+        # Cập nhật parent nếu cần
+        if parent_item_group:
+            doc = frappe.get_doc("Item Group", new_name)
+            doc.parent_item_group = parent_item_group
+            doc.save()
+            frappe.db.commit()
+        
+        return {
+            "success": True,
+            "new_name": new_name,
+            "message": _("Đã cập nhật nhóm hàng {0}").format(new_name)
+        }
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "update_item_group Error")
+        return {"success": False, "message": str(e)}
+
+
+@frappe.whitelist()
+def delete_item_group(name):
+    """
+    Xóa Item Group (chỉ khi không có item nào)
+    """
+    try:
+        if not frappe.db.exists("Item Group", name):
+            return {"success": False, "message": _("Nhóm hàng không tồn tại")}
+        
+        # Kiểm tra có item không
+        item_count = frappe.db.count("Item", {"item_group": name})
+        if item_count > 0:
+            return {
+                "success": False, 
+                "message": _("Không thể xóa nhóm hàng {0} vì còn {1} sản phẩm").format(name, item_count)
+            }
+        
+        # Kiểm tra có subgroup không
+        subgroup_count = frappe.db.count("Item Group", {"parent_item_group": name})
+        if subgroup_count > 0:
+            return {
+                "success": False,
+                "message": _("Không thể xóa nhóm hàng {0} vì còn {1} nhóm con").format(name, subgroup_count)
+            }
+        
+        frappe.delete_doc("Item Group", name)
+        
+        return {
+            "success": True,
+            "message": _("Đã xóa nhóm hàng {0}").format(name)
+        }
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "delete_item_group Error")
+        return {"success": False, "message": str(e)}
+
+
+@frappe.whitelist()
+def get_uom_list():
+    """
+    Lấy danh sách đơn vị tính
+    """
+    try:
+        uoms = frappe.get_all(
+            "UOM",
+            filters={"enabled": 1},
+            fields=["name", "uom_name"],
+            order_by="name"
+        )
+        return uoms
+    except Exception as e:
+        return []
