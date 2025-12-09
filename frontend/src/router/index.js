@@ -35,6 +35,12 @@ const routes = [
         meta: { title: 'Tổng quan' }
       },
       {
+        path: 'stock/dashboard',
+        name: 'StockDashboard',
+        component: () => import('@/pages/stock/StockDashboard.vue'),
+        meta: { title: 'Thống kê kho hàng' }
+      },
+      {
         path: 'stock/receipt',
         name: 'MaterialReceipt',
         component: () => import('@/pages/stock/MaterialReceipt.vue'),
@@ -74,6 +80,12 @@ const routes = [
         meta: { title: 'Quản lý kho hàng' }
       },
       {
+        path: 'production/dashboard',
+        name: 'ProductionDashboard',
+        component: () => import('@/pages/production/ProductionDashboard.vue'),
+        meta: { title: 'Thống kê sản xuất' }
+      },
+      {
         path: 'production/boms',
         name: 'BOMList',
         component: () => import('@/pages/production/BOMList.vue'),
@@ -98,6 +110,12 @@ const routes = [
         meta: { title: 'Chi tiết lệnh sản xuất' }
       },
       // Purchase Invoice routes
+      {
+        path: 'sales-purchase/dashboard',
+        name: 'SalesPurchaseDashboard',
+        component: () => import('@/pages/SalesPurchaseDashboard.vue'),
+        meta: { title: 'Thống kê mua bán' }
+      },
       {
         path: 'purchasing/invoices',
         name: 'PurchaseInvoiceList',

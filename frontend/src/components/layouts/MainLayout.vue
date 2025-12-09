@@ -272,16 +272,26 @@ const menuSections = [
     // Phiếu kho
     label: 'Kho',
     items: [
+      { path: '/stock/dashboard', label: 'Thống kê kho', icon: HomeIcon },
       { path: '/stock/entries', label: 'Danh sách phiếu', icon: ListIcon },
       { path: '/stock/receipt', label: 'Nhập kho', icon: ReceiptIcon },
-      { path: '/stock/issue', label: 'Xuất kho', icon: IssueIcon },
-      { path: '/production/orders', label: 'Lệnh sản xuất', icon: ManufactureIcon }
+      { path: '/stock/issue', label: 'Xuất kho', icon: IssueIcon }
+    ]
+  },
+  {
+    // Sản xuất
+    label: 'Sản xuất',
+    items: [
+      { path: '/production/dashboard', label: 'Thống kê SX', icon: HomeIcon },
+      { path: '/production/orders', label: 'Lệnh sản xuất', icon: ManufactureIcon },
+      { path: '/production/boms', label: 'Định mức NVL', icon: BOMIcon }
     ]
   },
   {
     // Mua bán
     label: 'Giao dịch',
     items: [
+      { path: '/sales-purchase/dashboard', label: 'Thống kê mua bán', icon: HomeIcon },
       { path: '/purchasing/invoices', label: 'Hóa đơn mua', icon: PurchaseIcon },
       { path: '/selling/invoices', label: 'Hóa đơn bán', icon: SellIcon }
     ]
@@ -291,8 +301,7 @@ const menuSections = [
     label: 'Danh mục',
     items: [
       { path: '/stock/warehouses', label: 'Quản lý kho', icon: WarehouseIcon },
-      { path: '/master/items', label: 'Sản phẩm', icon: ProductIcon },
-      { path: '/production/boms', label: 'Định mức NVL', icon: BOMIcon }
+      { path: '/master/items', label: 'Sản phẩm', icon: ProductIcon }
     ]
   }
 ]

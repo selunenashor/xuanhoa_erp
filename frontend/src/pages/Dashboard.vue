@@ -23,6 +23,160 @@
       </div>
     </div>
 
+    <!-- Smart Insights -->
+    <div v-if="insights.length > 0" class="bg-gradient-to-r from-indigo-50 to-blue-50 rounded-xl p-6 border border-indigo-100">
+      <div class="flex items-center gap-2 mb-4">
+        <LightBulbIcon class="w-6 h-6 text-indigo-600" />
+        <h3 class="text-lg font-semibold text-gray-800">Gợi ý thông minh</h3>
+      </div>
+      <div class="space-y-3">
+        <div v-for="insight in insights" :key="insight.id"
+             :class="['flex items-start gap-3 p-4 rounded-lg bg-white border transition-all hover:shadow-sm', 
+                      insight.priority === 'high' ? 'border-red-200' : 
+                      insight.priority === 'medium' ? 'border-amber-200' : 'border-blue-200']">
+          <div :class="['w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0',
+                        insight.priority === 'high' ? 'bg-red-100' : 
+                        insight.priority === 'medium' ? 'bg-amber-100' : 'bg-blue-100']">
+            <component :is="insight.icon" :class="['w-4 h-4',
+                                                    insight.priority === 'high' ? 'text-red-600' : 
+                                                    insight.priority === 'medium' ? 'text-amber-600' : 'text-blue-600']" />
+          </div>
+          <div class="flex-1">
+            <p class="text-sm font-medium text-gray-800">{{ insight.message }}</p>
+            <p v-if="insight.detail" class="text-xs text-gray-500 mt-1">{{ insight.detail }}</p>
+          </div>
+          <button v-if="insight.action"
+                  @click="handleInsightAction(insight)"
+                  class="text-xs font-medium text-indigo-600 hover:text-indigo-700 whitespace-nowrap">
+            {{ insight.actionLabel }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Charts Section -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <!-- Stock Movement Chart -->
+      <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+        <h3 class="text-lg font-semibold text-gray-800 mb-4">Biến động kho 7 ngày</h3>
+        <div class="h-64">
+          <svg class="w-full h-full" viewBox="0 0 400 200">
+            <!-- Y-axis labels -->
+            <text x="10" y="20" class="text-xs fill-gray-400">{{ maxStockValue }}</text>
+            <text x="10" y="110" class="text-xs fill-gray-400">{{ Math.round(maxStockValue/2) }}</text>
+            <text x="10" y="195" class="text-xs fill-gray-400">0</text>
+            
+            <!-- Grid lines -->
+            <line x1="40" y1="20" x2="390" y2="20" stroke="#E5E7EB" stroke-width="1" stroke-dasharray="2,2"/>
+            <line x1="40" y1="110" x2="390" y2="110" stroke="#E5E7EB" stroke-width="1" stroke-dasharray="2,2"/>
+            <line x1="40" y1="190" x2="390" y2="190" stroke="#E5E7EB" stroke-width="1"/>
+            
+            <!-- Receipt bars -->
+            <rect v-for="(point, i) in chartData" :key="'receipt-'+i"
+                  :x="60 + i * 50" 
+                  :y="190 - point.receiptHeight" 
+                  :width="18" 
+                  :height="point.receiptHeight"
+                  :class="'fill-green-400 hover:fill-green-500 transition-colors'"
+                  rx="2">
+              <title>Nhập: {{ point.receipts }} phiếu</title>
+            </rect>
+            
+            <!-- Issue bars -->
+            <rect v-for="(point, i) in chartData" :key="'issue-'+i"
+                  :x="80 + i * 50" 
+                  :y="190 - point.issueHeight" 
+                  :width="18" 
+                  :height="point.issueHeight"
+                  :class="'fill-blue-400 hover:fill-blue-500 transition-colors'"
+                  rx="2">
+              <title>Xuất: {{ point.issues }} phiếu</title>
+            </rect>
+            
+            <!-- X-axis labels -->
+            <text v-for="(point, i) in chartData" :key="'label-'+i"
+                  :x="70 + i * 50" 
+                  y="205" 
+                  class="text-xs fill-gray-500 text-anchor-middle">
+              {{ point.day }}
+            </text>
+          </svg>
+        </div>
+        <div class="flex items-center justify-center gap-6 mt-4 pt-4 border-t border-gray-100">
+          <div class="flex items-center gap-2">
+            <div class="w-3 h-3 rounded bg-green-400"></div>
+            <span class="text-xs text-gray-600">Phiếu nhập</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <div class="w-3 h-3 rounded bg-blue-400"></div>
+            <span class="text-xs text-gray-600">Phiếu xuất</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Work Order Status Chart -->
+      <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+        <h3 class="text-lg font-semibold text-gray-800 mb-4">Tình trạng lệnh sản xuất</h3>
+        <div class="h-64 flex items-center justify-center">
+          <svg class="w-48 h-48" viewBox="0 0 200 200">
+            <!-- Background circle -->
+            <circle cx="100" cy="100" r="80" fill="none" stroke="#F3F4F6" stroke-width="20"/>
+            
+            <!-- Progress arcs -->
+            <circle v-if="workOrderStats.total > 0"
+                    cx="100" cy="100" r="80" 
+                    fill="none" 
+                    :stroke="'#10B981'" 
+                    stroke-width="20"
+                    :stroke-dasharray="`${workOrderStats.completedPercent * 5.024} 502.4`"
+                    transform="rotate(-90 100 100)"
+                    class="transition-all duration-500"/>
+            
+            <circle v-if="workOrderStats.total > 0"
+                    cx="100" cy="100" r="80" 
+                    fill="none" 
+                    :stroke="'#F59E0B'" 
+                    stroke-width="20"
+                    :stroke-dasharray="`${workOrderStats.inProcessPercent * 5.024} 502.4`"
+                    :stroke-dashoffset="`${-workOrderStats.completedPercent * 5.024}`"
+                    transform="rotate(-90 100 100)"
+                    class="transition-all duration-500"/>
+            
+            <!-- Center text -->
+            <text x="100" y="95" text-anchor="middle" class="text-2xl font-bold fill-gray-800">
+              {{ workOrderStats.total }}
+            </text>
+            <text x="100" y="115" text-anchor="middle" class="text-xs fill-gray-500">
+              Lệnh SX
+            </text>
+          </svg>
+        </div>
+        <div class="space-y-2 mt-4 pt-4 border-t border-gray-100">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <div class="w-3 h-3 rounded-full bg-green-500"></div>
+              <span class="text-sm text-gray-600">Hoàn thành</span>
+            </div>
+            <span class="text-sm font-medium text-gray-800">{{ workOrderStats.completed }}</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <div class="w-3 h-3 rounded-full bg-amber-500"></div>
+              <span class="text-sm text-gray-600">Đang thực hiện</span>
+            </div>
+            <span class="text-sm font-medium text-gray-800">{{ workOrderStats.inProcess }}</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <div class="w-3 h-3 rounded-full bg-gray-300"></div>
+              <span class="text-sm text-gray-600">Chưa bắt đầu</span>
+            </div>
+            <span class="text-sm font-medium text-gray-800">{{ workOrderStats.notStarted }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Quick Actions Grid -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <!-- Kho hàng -->
@@ -34,6 +188,20 @@
           <h3 class="text-lg font-semibold text-gray-800">Kho hàng</h3>
         </div>
         <div class="space-y-2">
+          <router-link 
+            to="/master/items"
+            class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:border-primary hover:bg-primary/5 transition-colors group"
+          >
+            <BoxIcon class="w-5 h-5 text-teal-500" />
+            <span class="text-sm font-medium text-gray-700 group-hover:text-primary">Quản lý sản phẩm</span>
+          </router-link>
+          <router-link 
+            to="/stock/warehouses"
+            class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:border-primary hover:bg-primary/5 transition-colors group"
+          >
+            <WarehouseIcon class="w-5 h-5 text-gray-500" />
+            <span class="text-sm font-medium text-gray-700 group-hover:text-primary">Quản lý kho</span>
+          </router-link>
           <router-link 
             to="/stock/receipt"
             class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:border-primary hover:bg-primary/5 transition-colors group"
@@ -68,44 +236,18 @@
         </div>
         <div class="space-y-2">
           <router-link 
-            to="/production/orders"
-            class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:border-primary hover:bg-primary/5 transition-colors group"
-          >
-            <ClipboardIcon class="w-5 h-5 text-amber-500" />
-            <span class="text-sm font-medium text-gray-700 group-hover:text-primary">Lệnh sản xuất</span>
-          </router-link>
-          <router-link 
             to="/production/boms"
             class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:border-primary hover:bg-primary/5 transition-colors group"
           >
             <BOMIcon class="w-5 h-5 text-purple-500" />
             <span class="text-sm font-medium text-gray-700 group-hover:text-primary">Định mức nguyên vật liệu</span>
           </router-link>
-        </div>
-      </div>
-
-      <!-- Danh mục -->
-      <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-        <div class="flex items-center gap-2 mb-4">
-          <div class="w-8 h-8 rounded-lg bg-teal-100 flex items-center justify-center">
-            <BoxIcon class="w-5 h-5 text-teal-600" />
-          </div>
-          <h3 class="text-lg font-semibold text-gray-800">Danh mục</h3>
-        </div>
-        <div class="space-y-2">
           <router-link 
-            to="/master/items"
+            to="/production/orders"
             class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:border-primary hover:bg-primary/5 transition-colors group"
           >
-            <BoxIcon class="w-5 h-5 text-teal-500" />
-            <span class="text-sm font-medium text-gray-700 group-hover:text-primary">Quản lý sản phẩm</span>
-          </router-link>
-          <router-link 
-            to="/stock/warehouses"
-            class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:border-primary hover:bg-primary/5 transition-colors group"
-          >
-            <WarehouseIcon class="w-5 h-5 text-gray-500" />
-            <span class="text-sm font-medium text-gray-700 group-hover:text-primary">Quản lý kho</span>
+            <ClipboardIcon class="w-5 h-5 text-amber-500" />
+            <span class="text-sm font-medium text-gray-700 group-hover:text-primary">Lệnh sản xuất</span>
           </router-link>
         </div>
       </div>
@@ -225,6 +367,28 @@ const goToActivityDetail = (activity) => {
 const loadingActivities = ref(false)
 const recentActivities = ref([])
 const kpiData = ref(null)
+const insights = ref([])
+const chartData = ref([])
+const maxStockValue = ref(100)
+
+// Work Order Statistics
+const workOrderStats = computed(() => {
+  const data = kpiData.value
+  const completed = data?.work_orders?.['Completed'] || 0
+  const inProcess = data?.work_orders?.['In Process'] || 0
+  const notStarted = data?.work_orders?.['Not Started'] || 0
+  const total = completed + inProcess + notStarted
+  
+  return {
+    completed,
+    inProcess,
+    notStarted,
+    total,
+    completedPercent: total > 0 ? (completed / total) * 100 : 0,
+    inProcessPercent: total > 0 ? (inProcess / total) * 100 : 0,
+    notStartedPercent: total > 0 ? (notStarted / total) * 100 : 0
+  }
+})
 
 // Icon components
 const BoxIcon = {
@@ -326,6 +490,39 @@ const BOMIcon = {
   ])
 }
 
+const LightBulbIcon = {
+  render: () => h('svg', { fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' }, [
+    h('path', { 
+      'stroke-linecap': 'round', 
+      'stroke-linejoin': 'round', 
+      'stroke-width': '2',
+      d: 'M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z'
+    })
+  ])
+}
+
+const AlertIcon = {
+  render: () => h('svg', { fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' }, [
+    h('path', { 
+      'stroke-linecap': 'round', 
+      'stroke-linejoin': 'round', 
+      'stroke-width': '2',
+      d: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'
+    })
+  ])
+}
+
+const TrendIcon = {
+  render: () => h('svg', { fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' }, [
+    h('path', { 
+      'stroke-linecap': 'round', 
+      'stroke-linejoin': 'round', 
+      'stroke-width': '2',
+      d: 'M13 7h8m0 0v8m0-8l-8 8-4-4-6 6'
+    })
+  ])
+}
+
 // Helper functions for activity styling
 const getActivityIcon = (type) => {
   const icons = {
@@ -374,7 +571,7 @@ const kpiCards = computed(() => {
   return [
     {
       id: 1,
-      label: 'Lệnh SX đang chạy',
+      label: 'Lệnh SX chưa hoàn thành',
       value: woInProgress + woNotStarted,
       subLabel: woCompleted > 0 ? `${woCompleted} đã hoàn thành` : null,
       icon: ManufactureIcon,
@@ -429,8 +626,126 @@ const loadRecentActivities = async () => {
 const loadKPIData = async () => {
   try {
     kpiData.value = await dashboardAPI.getKPI()
+    generateInsights()
+    generateChartData()
   } catch (error) {
     console.error('Error loading KPI data:', error)
+  }
+}
+
+// Generate smart insights
+const generateInsights = () => {
+  const data = kpiData.value
+  if (!data) return
+  
+  const newInsights = []
+  
+  // Low stock alert
+  if (data.low_stock_items && data.low_stock_items > 0) {
+    newInsights.push({
+      id: 'low-stock',
+      icon: AlertIcon,
+      priority: 'high',
+      message: `Có ${data.low_stock_items} sản phẩm sắp hết hàng`,
+      detail: 'Cần nhập kho để đảm bảo sản xuất liên tục',
+      action: 'view-items',
+      actionLabel: 'Xem chi tiết'
+    })
+  }
+  
+  // Work order trend
+  const woInProgress = data?.work_orders?.['In Process'] || 0
+  const woNotStarted = data?.work_orders?.['Not Started'] || 0
+  if (woInProgress + woNotStarted > 5) {
+    newInsights.push({
+      id: 'wo-backlog',
+      icon: TrendIcon,
+      priority: 'medium',
+      message: `${woInProgress + woNotStarted} lệnh sản xuất đang chờ xử lý`,
+      detail: 'Cân nhắc tăng năng lực sản xuất hoặc ưu tiên các lệnh quan trọng',
+      action: 'view-orders',
+      actionLabel: 'Quản lý lệnh'
+    })
+  }
+  
+  // Stock movement trend
+  const receiptsToday = data?.receipts_today || 0
+  const issuesYesterday = data?.issues_yesterday || 0
+  if (receiptsToday > issuesYesterday * 1.5) {
+    newInsights.push({
+      id: 'stock-increase',
+      icon: TrendIcon,
+      priority: 'low',
+      message: 'Lượng hàng nhập kho tăng đột biến',
+      detail: `${receiptsToday} phiếu nhập hôm nay, tăng so với ngày hôm qua`,
+      action: null,
+      actionLabel: null
+    })
+  }
+  
+  // Completed work orders
+  const woCompleted = data?.work_orders?.['Completed'] || 0
+  if (woCompleted > 0) {
+    newInsights.push({
+      id: 'wo-completed',
+      icon: CheckIcon,
+      priority: 'low',
+      message: `${woCompleted} lệnh sản xuất đã hoàn thành`,
+      detail: 'Kiểm tra và xác nhận chất lượng sản phẩm',
+      action: 'view-completed',
+      actionLabel: 'Xem lệnh'
+    })
+  }
+  
+  insights.value = newInsights
+}
+
+// Generate chart data (last 7 days)
+const generateChartData = () => {
+  const data = kpiData.value
+  if (!data?.stock_movement) {
+    // Generate mock data for demo
+    const days = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7']
+    const mockData = days.map((day, i) => ({
+      day,
+      receipts: Math.floor(Math.random() * 10) + 2,
+      issues: Math.floor(Math.random() * 8) + 1
+    }))
+    
+    const max = Math.max(...mockData.map(d => Math.max(d.receipts, d.issues)))
+    maxStockValue.value = max + 2
+    
+    chartData.value = mockData.map(d => ({
+      ...d,
+      receiptHeight: (d.receipts / maxStockValue.value) * 170,
+      issueHeight: (d.issues / maxStockValue.value) * 170
+    }))
+  } else {
+    // Use real data from API
+    const movement = data.stock_movement
+    const max = Math.max(...movement.map(d => Math.max(d.receipts, d.issues)))
+    maxStockValue.value = max + 2
+    
+    chartData.value = movement.map(d => ({
+      ...d,
+      receiptHeight: (d.receipts / maxStockValue.value) * 170,
+      issueHeight: (d.issues / maxStockValue.value) * 170
+    }))
+  }
+}
+
+// Handle insight actions
+const handleInsightAction = (insight) => {
+  switch (insight.action) {
+    case 'view-items':
+      router.push('/master/items')
+      break
+    case 'view-orders':
+      router.push('/production/orders')
+      break
+    case 'view-completed':
+      router.push('/production/orders?status=Completed')
+      break
   }
 }
 
