@@ -118,7 +118,7 @@ Dự án sử dụng các Doctypes có sẵn từ ERPNext, được phân theo m
 
 ### Điều kiện tiên quyết
 
-⚠️ **QUAN TRỌNG**: App này **yêu cầu ERPNext** đã được cài đặt và được thiết lập cơ bản trên site.
+⚠️ **QUAN TRỌNG**: App này **yêu cầu ERPNext** đã được cài đặt và được thiết lập cơ bản trên site. Hướng dẫn cài ERPNext của Frappe tại [đây](https://github.com/frappe/erpnext/?tab=readme-ov-file#development-setup)
 
 ```bash
 # Kiểm tra ERPNext đã cài chưa
