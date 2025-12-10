@@ -497,10 +497,11 @@ def get_work_order_detail(work_order_name):
     # Lấy thông tin nguyên liệu
     required_items = []
     for item in doc.required_items:
-        # Lấy tồn kho hiện tại
+        # Lấy tồn kho hiện tại - ưu tiên dùng source_warehouse của Work Order
+        warehouse = doc.source_warehouse or item.source_warehouse
         actual_qty = frappe.db.get_value("Bin", {
             "item_code": item.item_code,
-            "warehouse": item.source_warehouse
+            "warehouse": warehouse
         }, "actual_qty") or 0
         
         required_items.append({
@@ -511,7 +512,7 @@ def get_work_order_detail(work_order_name):
             "consumed_qty": item.consumed_qty or 0,
             "available_qty": actual_qty,  # Tồn kho tại kho nguồn
             "available_qty_at_source": actual_qty,  # Alias for backward compatibility
-            "source_warehouse": item.source_warehouse,
+            "source_warehouse": warehouse,  # Dùng warehouse thực tế
             "uom": frappe.db.get_value("Item", item.item_code, "stock_uom") or "Nos"
         })
     
@@ -715,15 +716,56 @@ def create_work_order(bom_no, qty, planned_start_date=None, expected_delivery_da
         if expected_delivery_date:
             doc.expected_delivery_date = expected_delivery_date
         
-        # Warehouse settings
+        # Warehouse settings - Tự động lấy warehouse mặc định nếu không truyền vào
+        if not source_warehouse:
+            # Ưu tiên lấy "Kho Chính - XHTB" trước
+            company_abbr = frappe.db.get_value("Company", company, "abbr")
+            source_warehouse = f"Kho Chính - {company_abbr}"
+            
+            # Nếu không tồn tại, lấy kho mặc định từ Stock Settings
+            if not frappe.db.exists("Warehouse", source_warehouse):
+                source_warehouse = frappe.db.get_single_value("Stock Settings", "default_warehouse")
+            
+            # Nếu vẫn không có, lấy warehouse đầu tiên không phải group
+            if not source_warehouse:
+                source_warehouse = frappe.db.get_value("Warehouse", {"is_group": 0}, "name")
+        
         if source_warehouse:
             doc.source_warehouse = source_warehouse
+            
+        if not wip_warehouse:
+            # Ưu tiên lấy "Kho Chính - XHTB"
+            company_abbr = frappe.db.get_value("Company", company, "abbr")
+            wip_warehouse = f"Kho Chính - {company_abbr}"
+            if not frappe.db.exists("Warehouse", wip_warehouse):
+                # Lấy kho WIP mặc định
+                wip_warehouse = frappe.db.get_value("Warehouse", {"warehouse_type": "Work In Progress"}, "name")
+            
         if wip_warehouse:
             doc.wip_warehouse = wip_warehouse
+            
+        if not fg_warehouse:
+            # Ưu tiên lấy "Kho Chính - XHTB"
+            company_abbr = frappe.db.get_value("Company", company, "abbr")
+            fg_warehouse = f"Kho Chính - {company_abbr}"
+            if not frappe.db.exists("Warehouse", fg_warehouse):
+                # Lấy kho thành phẩm mặc định
+                fg_warehouse = frappe.db.get_value("Warehouse", {"warehouse_type": "Finished Goods"}, "name")
+                if not fg_warehouse:
+                    fg_warehouse = source_warehouse  # Dùng kho nguồn làm kho đích nếu không có kho FG
+                
         if fg_warehouse:
             doc.fg_warehouse = fg_warehouse
         
         doc.insert()
+        
+        # CRITICAL FIX: Cập nhật warehouse cho tất cả Work Order Items
+        # ERPNext tự động tạo items từ BOM nhưng có thể dùng warehouse sai
+        if doc.required_items:
+            for item in doc.required_items:
+                if source_warehouse:
+                    item.source_warehouse = source_warehouse
+            doc.save()
         
         return {
             "success": True,
@@ -798,6 +840,23 @@ def submit_work_order(work_order_name):
         elif doc.docstatus == 2:
             return {"success": False, "message": _("Lệnh sản xuất này đã bị hủy, không thể duyệt.")}
         
+        # CRITICAL FIX: Đảm bảo tất cả Work Order Items có warehouse đúng trước khi submit
+        source_warehouse = doc.source_warehouse
+        if not source_warehouse:
+            # Lấy warehouse mặc định
+            company_abbr = frappe.db.get_value("Company", doc.company, "abbr")
+            source_warehouse = f"Kho Chính - {company_abbr}"
+            if not frappe.db.exists("Warehouse", source_warehouse):
+                source_warehouse = frappe.db.get_single_value("Stock Settings", "default_warehouse")
+            if source_warehouse:
+                doc.source_warehouse = source_warehouse
+        
+        # Cập nhật warehouse cho tất cả items
+        if source_warehouse and doc.required_items:
+            for item in doc.required_items:
+                if not item.source_warehouse or item.source_warehouse == "Stores - XHTB":
+                    item.source_warehouse = source_warehouse
+        
         doc.submit()
         
         return {
@@ -846,6 +905,40 @@ def start_work_order(work_order_name):
         # Kiểm tra tồn kho trước khi cấp phát
         insufficient_items = []
         source_warehouse = work_order.source_warehouse
+        
+        # Nếu chưa có source warehouse, lấy kho "Kho Chính - XHTB" mặc định
+        if not source_warehouse:
+            # Ưu tiên lấy "Kho Chính - XHTB"
+            company_abbr = frappe.db.get_value("Company", work_order.company, "abbr")
+            source_warehouse = f"Kho Chính - {company_abbr}"
+            
+            # Nếu không tồn tại, lấy kho từ Stock Settings
+            if not frappe.db.exists("Warehouse", source_warehouse):
+                source_warehouse = frappe.db.get_single_value("Stock Settings", "default_warehouse")
+            
+            # Cập nhật lại Work Order
+            if source_warehouse:
+                work_order.source_warehouse = source_warehouse
+                # CRITICAL FIX: Cập nhật warehouse cho tất cả Work Order Items
+                for item in work_order.required_items:
+                    item.source_warehouse = source_warehouse
+                work_order.save()
+            else:
+                # Lấy warehouse đầu tiên trong hệ thống
+                warehouse = frappe.db.get_value("Warehouse", {"is_group": 0}, "name")
+                if warehouse:
+                    source_warehouse = warehouse
+                    work_order.source_warehouse = source_warehouse
+                    # CRITICAL FIX: Cập nhật warehouse cho tất cả Work Order Items
+                    for item in work_order.required_items:
+                        item.source_warehouse = source_warehouse
+                    work_order.save()
+        
+        if not source_warehouse:
+            return {
+                "success": False,
+                "message": _("Chưa thiết lập kho nguồn nguyên liệu. Vui lòng cập nhật lệnh sản xuất và chọn kho nguồn.")
+            }
         
         for item in work_order.required_items:
             required_qty = item.required_qty - item.transferred_qty
@@ -4268,3 +4361,483 @@ def get_uom_list():
         return uoms
     except Exception as e:
         return []
+
+
+# ============================================
+# DASHBOARD STATISTICS APIs
+# ============================================
+
+@frappe.whitelist()
+def get_stock_dashboard():
+    """
+    Lấy thống kê tổng quan cho Stock Dashboard
+    
+    Returns:
+        dict: Dữ liệu thống kê kho hàng
+    """
+    try:
+        from datetime import datetime, timedelta
+        today = datetime.now().date()
+        week_ago = today - timedelta(days=7)
+        month_ago = today - timedelta(days=30)
+        
+        # Tổng giá trị tồn kho
+        stock_value = frappe.db.sql("""
+            SELECT IFNULL(SUM(stock_value), 0) as total_value
+            FROM `tabBin`
+            WHERE actual_qty > 0
+        """, as_dict=1)[0].total_value or 0
+        
+        # Số lượng sản phẩm đang tồn
+        total_items = frappe.db.count("Bin", {"actual_qty": (">", 0)})
+        
+        # Sản phẩm sắp hết (dưới reorder level)
+        low_stock_items = frappe.db.sql("""
+            SELECT COUNT(*) as count
+            FROM `tabBin` b
+            INNER JOIN `tabItem Reorder` ir ON b.item_code = ir.parent
+            WHERE b.actual_qty > 0 
+            AND b.actual_qty <= ir.warehouse_reorder_level
+            AND b.warehouse = ir.warehouse
+        """, as_dict=1)[0].count or 0
+        
+        # Phiếu nhập kho tháng này
+        receipts_month = frappe.db.count("Stock Entry", {
+            "purpose": "Material Receipt",
+            "docstatus": 1,
+            "posting_date": (">=", month_ago)
+        })
+        
+        # Phiếu xuất kho tháng này
+        issues_month = frappe.db.count("Stock Entry", {
+            "purpose": "Material Issue",
+            "docstatus": 1,
+            "posting_date": (">=", month_ago)
+        })
+        
+        # Top 5 sản phẩm tồn kho nhiều nhất theo giá trị
+        top_items_by_value = frappe.db.sql("""
+            SELECT 
+                b.item_code,
+                i.item_name,
+                SUM(b.actual_qty) as total_qty,
+                i.stock_uom as uom,
+                SUM(b.stock_value) as total_value
+            FROM `tabBin` b
+            INNER JOIN `tabItem` i ON b.item_code = i.name
+            WHERE b.actual_qty > 0
+            GROUP BY b.item_code, i.item_name, i.stock_uom
+            ORDER BY total_value DESC
+            LIMIT 5
+        """, as_dict=1)
+        
+        # Biến động kho 6 tháng gần đây
+        from dateutil.relativedelta import relativedelta
+        stock_movement = []
+        
+        # Lấy 6 tháng gần nhất
+        for i in range(6):
+            month_date = today - relativedelta(months=i)
+            month_start = month_date.replace(day=1)
+            # Ngày cuối tháng
+            next_month = month_start + relativedelta(months=1)
+            month_end = next_month - timedelta(days=1)
+            
+            receipts = frappe.db.count("Stock Entry", {
+                "purpose": "Material Receipt",
+                "docstatus": 1,
+                "posting_date": ("between", [month_start, month_end])
+            })
+            
+            issues = frappe.db.count("Stock Entry", {
+                "purpose": "Material Issue",
+                "docstatus": 1,
+                "posting_date": ("between", [month_start, month_end])
+            })
+            
+            month_label = f"T{month_date.month}/{month_date.year}"
+            stock_movement.insert(0, {
+                "day": month_label,
+                "date": str(month_end),
+                "receipts": receipts,
+                "issues": issues
+            })
+        
+        # Kho có nhiều giao dịch nhất (tháng này)
+        top_warehouses = frappe.db.sql("""
+            SELECT 
+                warehouse,
+                COUNT(*) as transaction_count
+            FROM (
+                SELECT DISTINCT sed.t_warehouse as warehouse, se.name
+                FROM `tabStock Entry` se
+                INNER JOIN `tabStock Entry Detail` sed ON se.name = sed.parent
+                WHERE se.docstatus = 1
+                AND se.posting_date >= %s
+                AND sed.t_warehouse IS NOT NULL
+                UNION ALL
+                SELECT DISTINCT sed.s_warehouse as warehouse, se.name
+                FROM `tabStock Entry` se
+                INNER JOIN `tabStock Entry Detail` sed ON se.name = sed.parent
+                WHERE se.docstatus = 1
+                AND se.posting_date >= %s
+                AND sed.s_warehouse IS NOT NULL
+            ) as warehouse_transactions
+            GROUP BY warehouse
+            ORDER BY transaction_count DESC
+            LIMIT 5
+        """, (month_ago, month_ago), as_dict=1)
+        
+        return {
+            "stock_value": stock_value,
+            "total_items": total_items,
+            "low_stock_items": low_stock_items,
+            "receipts_month": receipts_month,
+            "issues_month": issues_month,
+            "top_items": top_items_by_value,
+            "stock_movement": stock_movement,
+            "top_warehouses": top_warehouses
+        }
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "get_stock_dashboard Error")
+        return {}
+
+
+@frappe.whitelist()
+def get_production_dashboard():
+    """
+    Lấy thống kê tổng quan cho Production Dashboard
+    
+    Returns:
+        dict: Dữ liệu thống kê sản xuất
+    """
+    try:
+        from datetime import datetime, timedelta
+        today = datetime.now().date()
+        week_ago = today - timedelta(days=7)
+        month_ago = today - timedelta(days=30)
+        
+        # Tổng số lệnh sản xuất
+        total_work_orders = frappe.db.count("Work Order")
+        
+        # Lệnh theo trạng thái
+        wo_not_started = frappe.db.count("Work Order", {"status": "Not Started"})
+        wo_in_progress = frappe.db.count("Work Order", {"status": "In Process"})
+        wo_completed = frappe.db.count("Work Order", {"status": "Completed"})
+        wo_stopped = frappe.db.count("Work Order", {"status": "Stopped"})
+        
+        # Lệnh tạo trong tuần
+        wo_this_week = frappe.db.count("Work Order", {
+            "creation": (">=", week_ago)
+        })
+        
+        # Lệnh hoàn thành tuần này
+        wo_completed_week = frappe.db.count("Work Order", {
+            "status": "Completed",
+            "modified": (">=", week_ago)
+        })
+        
+        # Tổng số lượng sản phẩm đã sản xuất tháng này
+        qty_produced_month = frappe.db.sql("""
+            SELECT IFNULL(SUM(produced_qty), 0) as total
+            FROM `tabWork Order`
+            WHERE modified >= %s
+        """, (month_ago,), as_dict=1)[0].total or 0
+        
+        # Top 5 sản phẩm sản xuất nhiều nhất
+        top_products = frappe.db.sql("""
+            SELECT 
+                wo.production_item,
+                i.item_name,
+                COUNT(*) as order_count,
+                SUM(wo.qty) as total_qty,
+                SUM(wo.produced_qty) as produced_qty,
+                i.stock_uom as uom
+            FROM `tabWork Order` wo
+            INNER JOIN `tabItem` i ON wo.production_item = i.name
+            GROUP BY wo.production_item, i.item_name, i.stock_uom
+            ORDER BY produced_qty DESC
+            LIMIT 5
+        """, as_dict=1)
+        
+        # Hiệu suất sản xuất 6 tháng gần đây
+        from dateutil.relativedelta import relativedelta
+        production_trend = []
+        for i in range(6):
+            month_date = today - relativedelta(months=i)
+            month_start = month_date.replace(day=1)
+            next_month = month_start + relativedelta(months=1)
+            month_end = next_month - timedelta(days=1)
+            
+            created = frappe.db.count("Work Order", {
+                "creation": ("between", [month_start, month_end])
+            })
+            
+            completed = frappe.db.count("Work Order", {
+                "status": "Completed",
+                "modified": ("between", [month_start, month_end])
+            })
+            
+            month_label = f"T{month_date.month}/{month_date.year}"
+            production_trend.insert(0, {
+                "day": month_label,
+                "date": str(month_end),
+                "created": created,
+                "completed": completed
+            })
+        
+        # Lệnh sắp hết hạn (planned_end_date trong 3 ngày tới)
+        upcoming_deadline = today + timedelta(days=3)
+        urgent_orders = frappe.db.sql("""
+            SELECT 
+                name,
+                production_item,
+                qty,
+                produced_qty,
+                status,
+                planned_end_date
+            FROM `tabWork Order`
+            WHERE status IN ('Not Started', 'In Process')
+            AND planned_end_date BETWEEN %s AND %s
+            ORDER BY planned_end_date ASC
+            LIMIT 5
+        """, (today, upcoming_deadline), as_dict=1)
+        
+        return {
+            "total_work_orders": total_work_orders,
+            "wo_not_started": wo_not_started,
+            "wo_in_progress": wo_in_progress,
+            "wo_completed": wo_completed,
+            "wo_stopped": wo_stopped,
+            "wo_this_week": wo_this_week,
+            "wo_completed_week": wo_completed_week,
+            "qty_produced_month": qty_produced_month,
+            "top_products": top_products,
+            "production_trend": production_trend,
+            "urgent_orders": urgent_orders
+        }
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "get_production_dashboard Error")
+        return {}
+
+
+@frappe.whitelist()
+def get_inventory_dashboard():
+    """
+    Lấy thống kê chi tiết hàng tồn kho theo warehouse
+    
+    Returns:
+        dict: Dữ liệu tồn kho chi tiết
+    """
+    try:
+        # Tồn kho theo warehouse
+        warehouse_stock = frappe.db.sql("""
+            SELECT 
+                b.warehouse,
+                COUNT(DISTINCT b.item_code) as item_count,
+                SUM(b.actual_qty) as total_qty,
+                SUM(b.stock_value) as total_value
+            FROM `tabBin` b
+            WHERE b.actual_qty > 0
+            GROUP BY b.warehouse
+            ORDER BY total_value DESC
+        """, as_dict=1)
+        
+        # Phân loại theo Item Group
+        items_by_group = frappe.db.sql("""
+            SELECT 
+                i.item_group,
+                COUNT(DISTINCT b.item_code) as item_count,
+                SUM(b.actual_qty) as total_qty,
+                SUM(b.stock_value) as total_value
+            FROM `tabBin` b
+            INNER JOIN `tabItem` i ON b.item_code = i.name
+            WHERE b.actual_qty > 0
+            GROUP BY i.item_group
+            ORDER BY total_value DESC
+            LIMIT 10
+        """, as_dict=1)
+        
+        return {
+            "warehouse_stock": warehouse_stock,
+            "items_by_group": items_by_group
+        }
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "get_inventory_dashboard Error")
+        return {}
+
+
+@frappe.whitelist()
+def get_sales_purchase_dashboard():
+    """
+    Lấy thống kê tổng quan cho mua bán (Purchase & Sales)
+    
+    Returns:
+        dict: Dữ liệu thống kê mua bán
+    """
+    try:
+        from datetime import datetime, timedelta
+        today = datetime.now().date()
+        month_ago = today - timedelta(days=30)
+        this_month_start = today.replace(day=1)
+        
+        # Thống kê hóa đơn mua
+        total_purchase = frappe.db.count("Purchase Invoice")
+        purchase_pending = frappe.db.count("Purchase Invoice", {"docstatus": 0})
+        purchase_submitted = frappe.db.count("Purchase Invoice", {"docstatus": 1})
+        purchase_cancelled = frappe.db.count("Purchase Invoice", {"docstatus": 2})
+        
+        # Tổng giá trị mua tháng này
+        purchase_value_month = frappe.db.sql("""
+            SELECT IFNULL(SUM(grand_total), 0) as total
+            FROM `tabPurchase Invoice`
+            WHERE docstatus = 1
+            AND posting_date >= %s
+        """, (this_month_start,), as_dict=1)[0].total or 0
+        
+        # Thống kê hóa đơn bán
+        total_sales = frappe.db.count("Sales Invoice")
+        sales_pending = frappe.db.count("Sales Invoice", {"docstatus": 0})
+        sales_submitted = frappe.db.count("Sales Invoice", {"docstatus": 1})
+        sales_cancelled = frappe.db.count("Sales Invoice", {"docstatus": 2})
+        
+        # Tổng giá trị bán tháng này
+        sales_value_month = frappe.db.sql("""
+            SELECT IFNULL(SUM(grand_total), 0) as total
+            FROM `tabSales Invoice`
+            WHERE docstatus = 1
+            AND posting_date >= %s
+        """, (this_month_start,), as_dict=1)[0].total or 0
+        
+        # Xu hướng mua bán 6 tháng
+        from dateutil.relativedelta import relativedelta
+        purchase_sales_trend = []
+        for i in range(6):
+            month_date = today - relativedelta(months=i)
+            month_start = month_date.replace(day=1)
+            next_month = month_start + relativedelta(months=1)
+            month_end = next_month - timedelta(days=1)
+            
+            purchase_count = frappe.db.count("Purchase Invoice", {
+                "docstatus": 1,
+                "posting_date": ("between", [month_start, month_end])
+            })
+            
+            purchase_value = frappe.db.sql("""
+                SELECT IFNULL(SUM(grand_total), 0) as total
+                FROM `tabPurchase Invoice`
+                WHERE docstatus = 1
+                AND posting_date BETWEEN %s AND %s
+            """, (month_start, month_end), as_dict=1)[0].total or 0
+            
+            sales_count = frappe.db.count("Sales Invoice", {
+                "docstatus": 1,
+                "posting_date": ("between", [month_start, month_end])
+            })
+            
+            sales_value = frappe.db.sql("""
+                SELECT IFNULL(SUM(grand_total), 0) as total
+                FROM `tabSales Invoice`
+                WHERE docstatus = 1
+                AND posting_date BETWEEN %s AND %s
+            """, (month_start, month_end), as_dict=1)[0].total or 0
+            
+            month_label = f"T{month_date.month}/{month_date.year}"
+            purchase_sales_trend.insert(0, {
+                "week": month_label,
+                "date": str(month_end),
+                "purchase_count": purchase_count,
+                "purchase_value": purchase_value,
+                "sales_count": sales_count,
+                "sales_value": sales_value
+            })
+        
+        # Top 5 nhà cung cấp (theo giá trị mua)
+        top_suppliers = frappe.db.sql("""
+            SELECT 
+                supplier,
+                COUNT(*) as invoice_count,
+                SUM(grand_total) as total_value
+            FROM `tabPurchase Invoice`
+            WHERE docstatus = 1
+            AND posting_date >= %s
+            GROUP BY supplier
+            ORDER BY total_value DESC
+            LIMIT 5
+        """, (month_ago,), as_dict=1)
+        
+        # Top 5 khách hàng (theo giá trị bán)
+        top_customers = frappe.db.sql("""
+            SELECT 
+                customer,
+                COUNT(*) as invoice_count,
+                SUM(grand_total) as total_value
+            FROM `tabSales Invoice`
+            WHERE docstatus = 1
+            AND posting_date >= %s
+            GROUP BY customer
+            ORDER BY total_value DESC
+            LIMIT 5
+        """, (month_ago,), as_dict=1)
+        
+        # Top sản phẩm mua nhiều nhất
+        top_purchased_items = frappe.db.sql("""
+            SELECT 
+                pii.item_code,
+                pii.item_name,
+                SUM(pii.qty) as total_qty,
+                pii.uom,
+                SUM(pii.amount) as total_amount
+            FROM `tabPurchase Invoice Item` pii
+            INNER JOIN `tabPurchase Invoice` pi ON pii.parent = pi.name
+            WHERE pi.docstatus = 1
+            AND pi.posting_date >= %s
+            GROUP BY pii.item_code, pii.item_name, pii.uom
+            ORDER BY total_amount DESC
+            LIMIT 5
+        """, (month_ago,), as_dict=1)
+        
+        # Top sản phẩm bán nhiều nhất
+        top_sold_items = frappe.db.sql("""
+            SELECT 
+                sii.item_code,
+                sii.item_name,
+                SUM(sii.qty) as total_qty,
+                sii.uom,
+                SUM(sii.amount) as total_amount
+            FROM `tabSales Invoice Item` sii
+            INNER JOIN `tabSales Invoice` si ON sii.parent = si.name
+            WHERE si.docstatus = 1
+            AND si.posting_date >= %s
+            GROUP BY sii.item_code, sii.item_name, sii.uom
+            ORDER BY total_amount DESC
+            LIMIT 5
+        """, (month_ago,), as_dict=1)
+        
+        # Lợi nhuận gộp (chỉ ước tính đơn giản)
+        gross_profit = sales_value_month - purchase_value_month
+        profit_margin = (gross_profit / sales_value_month * 100) if sales_value_month > 0 else 0
+        
+        return {
+            "total_purchase": total_purchase,
+            "purchase_pending": purchase_pending,
+            "purchase_submitted": purchase_submitted,
+            "purchase_cancelled": purchase_cancelled,
+            "purchase_value_month": purchase_value_month,
+            "total_sales": total_sales,
+            "sales_pending": sales_pending,
+            "sales_submitted": sales_submitted,
+            "sales_cancelled": sales_cancelled,
+            "sales_value_month": sales_value_month,
+            "gross_profit": gross_profit,
+            "profit_margin": profit_margin,
+            "purchase_sales_trend": purchase_sales_trend,
+            "top_suppliers": top_suppliers,
+            "top_customers": top_customers,
+            "top_purchased_items": top_purchased_items,
+            "top_sold_items": top_sold_items
+        }
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "get_sales_purchase_dashboard Error")
+        return {}
+

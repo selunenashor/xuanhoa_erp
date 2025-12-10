@@ -1,7 +1,8 @@
 # Xuân Hòa Manufacturing App
 
-> Ứng dụng quản lý sản xuất tùy chỉnh cho Công ty Xuân Hòa, xây dựng trên nền tảng Frappe/ERPNext theo kiến trúc Headless ERP.
+Dự án này chỉ mô phỏng quá trình số hóa cho một quy trình sản xuất cơ bản, bao gồm **mua hàng**, **sản xuất** và **bán hàng**. 
 
+---
 ## Tổng quan
 
 Xuân Hòa Manufacturing App là một custom Frappe app cung cấp:
@@ -19,30 +20,88 @@ Xuân Hòa Manufacturing App là một custom Frappe app cung cấp:
 └─────────────────────┘         └────────────────────────┘
 ```
 
-## Tính năng
+## Tính năng Frontend
 
-### Đã hoàn thành ✅
+### Các giao diện đã hoàn thành ✅
 
-| Module | Tính năng | Mô tả |
-|--------|-----------|-------|
-| **Dashboard** | Tổng quan | KPIs, thao tác nhanh, hoạt động gần đây |
-| **Kho** | Nhập kho | Tạo phiếu nhập nhiều sản phẩm |
-| | Xuất kho | Tạo phiếu xuất nhiều sản phẩm |
-| | Danh sách phiếu | Xem, lọc, tìm kiếm phiếu kho |
-| | Chi tiết phiếu | Xem chi tiết, submit/cancel phiếu |
-| | Quản lý kho | Xem tồn kho theo kho/sản phẩm |
-| **Sản xuất** | Lệnh sản xuất | CRUD, submit, start, complete, cancel |
-| | Định mức NVL | Quản lý BOM (tạo, sửa, xóa) |
-| **Giao dịch** | Hóa đơn mua | CRUD, submit, cancel, thanh toán |
-| | Hóa đơn bán | CRUD, submit, cancel, thanh toán |
-| **Danh mục** | Sản phẩm | CRUD Items, Item Groups |
-| | Kho hàng | Xem danh sách kho |
+| Module | Trang | Route | Mô tả |
+|--------|-------|-------|-------|
+| **Tổng quan** | Dashboard | `/` | KPIs, thao tác nhanh, hoạt động gần đây |
+| | Dashboard Mua/Bán | `/sales-purchase/dashboard` | Thống kê mua bán |
+| **Kho hàng** | Dashboard Kho | `/stock/dashboard` | Thống kê tồn kho |
+| | Nhập kho | `/stock/receipt` | Tạo phiếu nhập nhiều sản phẩm |
+| | Xuất kho | `/stock/issue` | Tạo phiếu xuất nhiều sản phẩm |
+| | Danh sách phiếu | `/stock/entries` | Xem, lọc, tìm kiếm phiếu kho |
+| | Chi tiết phiếu | `/stock/entries/:name` | Xem chi tiết, submit/cancel phiếu |
+| | Quản lý kho | `/stock/warehouses` | Xem tồn kho theo kho/sản phẩm |
+| **Sản xuất** | Dashboard SX | `/production/dashboard` | Thống kê sản xuất |
+| | Danh sách lệnh SX | `/production/orders` | Danh sách Work Orders |
+| | Tạo lệnh SX | `/production/orders/create` | Tạo mới Work Order |
+| | Chi tiết lệnh SX | `/production/orders/:name` | Chi tiết, start, complete, cancel |
+| | Định mức NVL | `/production/boms` | Quản lý BOM (tạo, sửa, xóa) |
+| **Mua hàng** | Danh sách HĐ mua | `/purchasing/invoices` | Danh sách Purchase Invoice |
+| | Tạo HĐ mua | `/purchasing/invoices/create` | Tạo hóa đơn mua hàng |
+| | Chi tiết HĐ mua | `/purchasing/invoices/:name` | Chi tiết, submit, cancel, thanh toán |
+| **Bán hàng** | Danh sách HĐ bán | `/selling/invoices` | Danh sách Sales Invoice |
+| | Tạo HĐ bán | `/selling/invoices/create` | Tạo hóa đơn bán hàng |
+| | Chi tiết HĐ bán | `/selling/invoices/:name` | Chi tiết, submit, cancel, thanh toán |
+| **Danh mục** | Quản lý sản phẩm | `/master/items` | CRUD Items |
+| **Hệ thống** | Đăng nhập | `/login` | Xác thực người dùng |
 
 ### Đang phát triển 🚧
 
-- Báo cáo thống kê
-- Quản lý Supplier/Customer  
+- Bulk import data từ file Excel
+- Xuất phiếu/hóa đơn ra file PDF/Word
+- Báo cáo thống kê chi tiết
 - Notification system
+
+## Doctypes sử dụng
+
+Dự án sử dụng các Doctypes có sẵn từ ERPNext, được phân theo module:
+
+### 📦 Module Stock (Kho hàng)
+
+| Doctype | Mô tả | Sử dụng trong |
+|---------|-------|---------------|
+| `Item` | Sản phẩm/Nguyên vật liệu | Danh mục sản phẩm, BOM, phiếu kho |
+| `Item Group` | Nhóm sản phẩm | Phân loại sản phẩm |
+| `Warehouse` | Kho hàng | Quản lý vị trí lưu trữ |
+| `Stock Entry` | Phiếu kho (Nhập/Xuất/Chuyển) | Nhập kho, Xuất kho, Sản xuất |
+| `Stock Entry Detail` | Chi tiết phiếu kho | Dòng sản phẩm trong phiếu |
+| `UOM` | Đơn vị tính | Định nghĩa đơn vị (cái, kg, m...) |
+| `Bin` | Tồn kho theo kho | Tra cứu tồn kho realtime |
+
+### 🏭 Module Manufacturing (Sản xuất)
+
+| Doctype | Mô tả | Sử dụng trong |
+|---------|-------|---------------|
+| `BOM` (Bill of Materials) | Định mức nguyên vật liệu | Công thức sản xuất sản phẩm |
+| `BOM Item` | Chi tiết BOM | Danh sách NVL trong BOM |
+| `Work Order` | Lệnh sản xuất | Quản lý quá trình sản xuất |
+
+### 💰 Module Accounts (Kế toán)
+
+| Doctype | Mô tả | Sử dụng trong |
+|---------|-------|---------------|
+| `Purchase Invoice` | Hóa đơn mua hàng | Ghi nhận mua NVL từ NCC |
+| `Purchase Invoice Item` | Chi tiết HĐ mua | Dòng sản phẩm trong HĐ mua |
+| `Sales Invoice` | Hóa đơn bán hàng | Ghi nhận bán hàng cho KH |
+| `Sales Invoice Item` | Chi tiết HĐ bán | Dòng sản phẩm trong HĐ bán |
+| `Payment Entry` | Phiếu thanh toán | Thanh toán cho HĐ mua/bán |
+
+### 👥 Module Buying & Selling (Đối tác)
+
+| Doctype | Mô tả | Sử dụng trong |
+|---------|-------|---------------|
+| `Supplier` | Nhà cung cấp | Hóa đơn mua hàng |
+| `Customer` | Khách hàng | Hóa đơn bán hàng |
+
+### ⚙️ Module Setup (Cấu hình)
+
+| Doctype | Mô tả | Sử dụng trong |
+|---------|-------|---------------|
+| `Company` | Công ty | Thông tin công ty chủ quản |
+| `User` | Người dùng | Đăng nhập, phân quyền |
 
 ## Yêu cầu hệ thống
 
@@ -59,7 +118,7 @@ Xuân Hòa Manufacturing App là một custom Frappe app cung cấp:
 
 ### Điều kiện tiên quyết
 
-⚠️ **QUAN TRỌNG**: App này **yêu cầu ERPNext** đã được cài đặt và hoạt động trên site trước khi cài đặt.
+⚠️ **QUAN TRỌNG**: App này **yêu cầu ERPNext** đã được cài đặt và được thiết lập cơ bản trên site.
 
 ```bash
 # Kiểm tra ERPNext đã cài chưa
@@ -73,7 +132,7 @@ bench --site [your-site] list-apps
 
 ```bash
 cd \$PATH_TO_YOUR_BENCH
-bench get-app git@github.com:selunenashor/xuanhoa_erp.git --branch main
+bench get-app https://github.com/selunenashor/xuanhoa_erp.git --branch main
 ```
 
 ### Bước 2: Cài đặt app vào site
@@ -197,7 +256,3 @@ bench --site erpnext.localhost execute xuanhoa_app.scripts.reset_all_data.setup_
 - **Python 3.12**
 - **MariaDB**
 - **Redis**
-
-## License
-
-MIT
